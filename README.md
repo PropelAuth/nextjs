@@ -1,16 +1,16 @@
-## PropelAuth Next.js (v13 / AppRouter) Library
+# PropelAuth Next.js (v13 / AppRouter) Library
 
 [PropelAuth](https://www.propelauth.com?utm_source=github&utm_medium=library&utm_campaign=nextjs) is a user management and authentication service for your B2B/multi-tenant applications.
 
 This library provides a simple way to integrate your Next.js application with PropelAuth. 
 
-### Installation
+## Installation
 
 ```bash
 npm install @propelauth/nextjs
 ```
 
-### Setup
+## Setup
 
 Before you start, make sure you have a PropelAuth account. You can sign up for free at [here](https://auth.propelauth.com).
 
@@ -40,7 +40,7 @@ export const {
 This file exports all of our server-side functions that you will need to use in your application. 
 You can find all the env variables for your application in the PropelAuth Dashboard under **Backend Integration**.
 
-#### 1. Set up middleware
+### 1. Set up middleware
 
 In your `src/middleware.ts` file, add the following:
 
@@ -61,7 +61,7 @@ export const config = {
 }
 ```
 
-#### 2. Set up routes (AppRouter)
+### 2. Set up routes (AppRouter)
 
 In your `src/app/api/auth/[slug]` directory, create a file called `route.ts` with the following content:
 
@@ -72,7 +72,7 @@ export const GET = getRouteHandler
 export const POST = postRouteHandler
 ```
 
-#### 3. Set up AuthProvider (AppRouter)
+### 3. Set up AuthProvider (AppRouter)
 
 In your root layout, `src/app/layout.tsx`, add the `AuthProvider`:
 
@@ -88,9 +88,9 @@ export default async function RootLayout({children}: {children: React.ReactNode}
 }
 ```
 
-### Usage
+## Usage
 
-#### Get the user in Server Components
+### Get the user in Server Components
 
 ```tsx
 import {getUser} from "@/auth";
@@ -117,7 +117,7 @@ const WelcomeMessage = () => {
 }
 ```
 
-#### Get the user in Client Components
+### Get the user in Client Components
 
 ```tsx
 "use client";
@@ -137,7 +137,7 @@ const WelcomeMessage = () => {
 }
 ```
 
-#### Checking organization membership / RBAC
+### Checking organization membership / RBAC
 
 Note that this works on both the client and server's `User` object, but the below example is on the server.
 
@@ -164,7 +164,7 @@ export default async function AdminOnlyPage({ params }: { params: { slug: string
 }
 ```
 
-#### Logging out
+### Logging out
 
 ```tsx
 "use client"
@@ -177,7 +177,7 @@ export default function LogoutButton() {
 }
 ```
 
-#### Logging in / Signing up
+### Logging in / Signing up
 
 If you don't want to use redirect functions, you can also use `useHostedPageUrls` which will return the URLs instead of redirecting.
 
@@ -195,7 +195,7 @@ export default function SignupAndLoginButtons() {
 }
 ```
 
-#### Redirecting to Account / Org pages
+### Redirecting to Account / Org pages
 
 PropelAuth also provides you with pre-built account and organization management UIs. 
 You can redirect your users to these pages by using the following functions:
