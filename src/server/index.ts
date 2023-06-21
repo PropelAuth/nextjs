@@ -1,4 +1,5 @@
-export type {OrgIdToOrgMemberInfo, OrgMemberInfo, User} from "../user"
+export type {OrgIdToOrgMemberInfo} from "../user"
+export {User, OrgMemberInfo} from "../user"
 export {UnauthorizedException, ConfigurationException} from "./exceptions"
 export type {ServerActions} from "./server-actions"
 export {initializeAuth} from "./auth"

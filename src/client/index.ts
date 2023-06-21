@@ -1,4 +1,5 @@
-export type {OrgIdToOrgMemberInfo, OrgMemberInfo, User} from "../user"
+export type {OrgIdToOrgMemberInfo} from "../user"
+export {User, OrgMemberInfo} from "../user"
 export {AuthProvider} from "./AuthProvider"
 export type {AuthProviderProps} from "./AuthProvider"
 export {useUser} from "./useUser"

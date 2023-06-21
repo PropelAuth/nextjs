@@ -1,8 +1,8 @@
-# PropelAuth Next.js (v13 / AppRouter) Library
+# PropelAuth Next.js (v13+) Library
 
 [PropelAuth](https://www.propelauth.com?utm_source=github&utm_medium=library&utm_campaign=nextjs) is a user management and authentication service for your B2B/multi-tenant applications.
 
-This library provides a simple way to integrate your Next.js application with PropelAuth. 
+This library provides a simple way to integrate your Next.js application (either AppRouter or Pages) with PropelAuth.
 
 ## Installation
 
@@ -31,6 +31,7 @@ export const {
     postRouteHandler,
     getUser,
     getUserOrRedirect,
+    getUserFromServerSideProps,
     validateAccessToken,
     validateAccessTokenOrUndefined,
     authMiddleware,
@@ -40,7 +41,50 @@ export const {
 This file exports all of our server-side functions that you will need to use in your application. 
 You can find all the env variables for your application in the PropelAuth Dashboard under **Backend Integration**.
 
-### 1. Set up middleware
+### 1. Set up routes
+
+In your `src/app/api/auth/[slug]` directory, create a file called `route.ts` with the following content:
+
+```typescript
+import {getRouteHandler, postRouteHandler} from "@/auth";
+
+export const GET = getRouteHandler
+export const POST = postRouteHandler
+```
+
+### 2. Set up AuthProvider 
+
+#### AppRouter Version
+
+In your root layout, `src/app/layout.tsx`, add the `AuthProvider`:
+
+```typescript jsx
+export default async function RootLayout({children}: {children: React.ReactNode}) {
+    return (
+        <html lang="en">
+        <AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL}>
+            <body className={inter.className}>{children}</body>
+        </AuthProvider>
+        </html>
+    )
+}
+```
+
+#### Pages Version
+
+In your `_app.tsx` file, add the `AuthProvider`:
+
+```typescript jsx
+export default function MyApp({Component, pageProps}: AppProps) {
+    return (
+        <AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL}>
+            <Component {...pageProps} />
+        </AuthProvider>
+    )
+}
+```
+
+### 3. Set up middleware (AppRouter only - skip if using Pages)
 
 In your `src/middleware.ts` file, add the following:
 
@@ -61,36 +105,9 @@ export const config = {
 }
 ```
 
-### 2. Set up routes (AppRouter)
-
-In your `src/app/api/auth/[slug]` directory, create a file called `route.ts` with the following content:
-
-```typescript
-import {getRouteHandler, postRouteHandler} from "@/auth";
-
-export const GET = getRouteHandler
-export const POST = postRouteHandler
-```
-
-### 3. Set up AuthProvider (AppRouter)
-
-In your root layout, `src/app/layout.tsx`, add the `AuthProvider`:
-
-```typescript jsx
-export default async function RootLayout({children}: {children: React.ReactNode}) {
-    return (
-        <html lang="en">
-        <AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL}>
-            <body className={inter.className}>{children}</body>
-        </AuthProvider>
-        </html>
-    )
-}
-```
-
 ## Usage
 
-### Get the user in Server Components
+### Get the user in Server Components (AppRouter example)
 
 ```tsx
 import {getUser} from "@/auth";
@@ -116,6 +133,29 @@ const WelcomeMessage = () => {
     return <div>Hello {user.firstName}!</div>
 }
 ```
+
+### Get the user in getServerSideProps (Pages example)
+
+```tsx
+import {GetServerSideProps, InferGetServerSidePropsType} from "next";
+import {getUserFromServerSideProps} from "@/auth";
+import {User} from "@propelauth/nextjs/client";
+
+export default function WelcomeMessage({userJson}: InferGetServerSidePropsType<typeof getServerSideProps>) {
+    // Deserialize the user from the JSON string so you can call functions like user.getOrg()
+    const user = User.fromJSON(userJson)
+    return <div>Hello, {user.firstName}</div>
+}
+
+export const getServerSideProps: GetServerSideProps = async (context) => {
+    const user = await getUserFromServerSideProps(context)
+    if (!user) {
+        return {redirect: {destination: '/api/auth/login', permanent: false}}
+    }
+    return { props: {userJson: JSON.stringify(user) } }
+}
+```
+
 
 ### Get the user in Client Components
 

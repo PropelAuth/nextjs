@@ -5,6 +5,7 @@ import {ConfigurationException, UnauthorizedException} from "./exceptions"
 import {InternalUser, OrgMemberInfo, toOrgIdToOrgMemberInfo, toUser, User} from "../user"
 import {NextRequest, NextResponse} from "next/server";
 import {ResponseCookie} from "next/dist/compiled/@edge-runtime/cookies";
+import {GetServerSidePropsContext} from "next";
 
 type RefreshAndAccessTokens = {
     refreshToken: string
@@ -50,6 +51,7 @@ export type ServerActionArgs = {
 export type ServerActions = {
     getUser: () => Promise<User | undefined>
     getUserOrRedirect: () => Promise<User>
+    getUserFromServerSideProps: (context: GetServerSidePropsContext) => Promise<User | undefined>
     validateAccessToken: (accessToken: string) => Promise<User>
     validateAccessTokenOrUndefined: (accessToken: string) => Promise<User | undefined>
     getRouteHandler: (req: NextRequest, { params }: { params: { slug: string } }) => Response | Promise<Response>
@@ -307,6 +309,42 @@ export function getServerActions({
         return new Response(null, { status: 401 })
     }
 
+    async function getUserFromServerSideProps(props: GetServerSidePropsContext) {
+        const accessToken = props.req.cookies[ACCESS_TOKEN_COOKIE_NAME]
+        const refreshToken = props.req.cookies[REFRESH_TOKEN_COOKIE_NAME]
+
+        // If we are authenticated, we can continue
+        if (accessToken) {
+            const user = await validateAccessTokenOrUndefined(accessToken)
+            if (user) {
+                return user
+            }
+        }
+
+        // Otherwise, we need to refresh the access token
+        if (refreshToken) {
+            const response = await refreshTokenWithAccessAndRefreshToken(refreshToken)
+            if (response.error === "unexpected") {
+                throw new Error("Unexpected error while refreshing access token")
+            } else if (response.error === "unauthorized") {
+                props.res.setHeader("Set-Cookie", [
+                    `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+                    `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+                ])
+                return undefined
+            } else {
+                const user = await validateAccessToken(response.accessToken)
+                props.res.setHeader("Set-Cookie", [
+                    `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`,
+                    `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`,
+                ])
+                return user
+            }
+        }
+
+        return undefined
+    }
+
     async function refreshTokenWithAccessAndRefreshToken(refreshToken: string): Promise<RefreshTokenResponse> {
         const body = {
             refresh_token: refreshToken,
@@ -426,6 +464,7 @@ export function getServerActions({
     return {
         getUser,
         getUserOrRedirect,
+        getUserFromServerSideProps,
         validateAccessToken,
         validateAccessTokenOrUndefined,
         getRouteHandler,
