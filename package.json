@@ -1,0 +1,47 @@
+{
+  "name": "@propelauth/nextjs",
+  "version": "0.0.60",
+  "exports": {
+    "./server": {
+      "browser": "./dist/server/index.mjs",
+      "import": "./dist/server/index.mjs",
+      "require": "./dist/server/index.js"
+    },
+    "./client": {
+      "browser": "./dist/client/index.mjs",
+      "import": "./dist/client/index.mjs",
+      "require": "./dist/client/index.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "server": [
+        "./dist/server/index.d.ts"
+      ],
+      "client": [
+        "./dist/client/index.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "tsup": "^6.7.0",
+    "typescript": "^5.1.3"
+  },
+  "peerDependencies": {
+    "next": "^13.1.0",
+    "react": "^18.2.0"
+  },
+  "dependencies": {
+    "jose": "^4.14.4"
+  }
+}
