@@ -47,9 +47,9 @@ export function getAuthUrlOrigin() {
 }
 
 export function getRedirectUri() {
-    const redirectUri = process.env.REDIRECT_URI
+    const redirectUri = process.env.PROPELAUTH_REDIRECT_URI
     if (!redirectUri) {
-        throw new Error("REDIRECT_URI is not set")
+        throw new Error("PROPELAUTH_REDIRECT_URI is not set")
     }
     return redirectUri
 }
@@ -63,9 +63,9 @@ export function getIntegrationApiKey() {
 }
 
 export function getVerifierKey() {
-    const verifierKey = process.env.VERIFIER_KEY
+    const verifierKey = process.env.PROPELAUTH_VERIFIER_KEY
     if (!verifierKey) {
-        throw new Error("VERIFIER_KEY is not set")
+        throw new Error("PROPELAUTH_VERIFIER_KEY is not set")
     }
     return verifierKey.replace(/\\n/g, "\n")
 }

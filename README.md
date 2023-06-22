@@ -4,6 +4,8 @@
 
 This library provides a simple way to integrate your Next.js application (either AppRouter or Pages) with PropelAuth.
 
+Next.js SSR/AppRouter support is in beta, while in beta, you'll need to reach out to support@propelauth.com to have this enabled for your account. 
+
 ## Installation
 
 ```bash
@@ -14,42 +16,35 @@ npm install @propelauth/nextjs
 
 Before you start, make sure you have a PropelAuth account. You can sign up for free at [here](https://auth.propelauth.com).
 
-Create a file called `propelauth.ts` in the `src` directory (or your project's root if you prefer) with the following content:
+You'll need to set the following .env variables in your Next.js application:
 
-```typescript
-import {initializeAuth} from "@propelauth/nextjs/server";
+- NEXT_PUBLIC_AUTH_URL
+- PROPELAUTH_API_KEY
+- PROPELAUTH_VERIFIER_KEY
+- PROPELAUTH_REDIRECT_URI
 
-const auth = initializeAuth({
-    authUrl: process.env.NEXT_PUBLIC_AUTH_URL,
-    redirectUri: process.env.REDIRECT_URI,
-    integrationApiKey: process.env.INTEGRATION_API_KEY,
-    verifierKey: process.env.VERIFIER_KEY,
-})
-
-export const {
-    getRouteHandler,
-    postRouteHandler,
-    getUser,
-    getUserOrRedirect,
-    getUserFromServerSideProps,
-    validateAccessToken,
-    validateAccessTokenOrUndefined,
-    authMiddleware,
-} = auth
-```
-
-This file exports all of our server-side functions that you will need to use in your application. 
-You can find all the env variables for your application in the PropelAuth Dashboard under **Backend Integration**.
+You can find the env variables for your application in the PropelAuth Dashboard under **Backend Integration**.
+For the PROPELAUTH_REDIRECT_URI, you should use `{YOUR_URL}/api/auth/callback`. 
+For example, if your application is hosted at `https://myapp.com`, then your PROPELAUTH_REDIRECT_URI would be `https://myapp.com/api/auth/callback`.
+Make sure to set this in the **Frontend Integration** section of your dashboard.
 
 ### 1. Set up routes
 
 In your `src/app/api/auth/[slug]` directory, create a file called `route.ts` with the following content:
 
 ```typescript
-import {getRouteHandler, postRouteHandler} from "@/auth";
+import {getRouteHandlers} from "@propelauth/nextjs/server/app-router";
+import {User} from "@propelauth/nextjs/server";
+import {NextRequest} from "next/server";
 
-export const GET = getRouteHandler
-export const POST = postRouteHandler
+// postLoginRedirectPathFn is optional, but if you want to redirect the user to a different page after login, you can do so here.
+const routeHandlers = getRouteHandlers({
+    postLoginRedirectPathFn: (user: User, req: NextRequest) => {
+        return "/"
+    }
+})
+export const GET = routeHandlers.getRouteHandler
+export const POST = routeHandlers.postRouteHandler
 ```
 
 ### 2. Set up AuthProvider 
@@ -89,7 +84,7 @@ export default function MyApp({Component, pageProps}: AppProps) {
 In your `src/middleware.ts` file, add the following:
 
 ```typescript
-import {authMiddleware} from "@/auth";
+import {authMiddleware} from "@propelauth/nextjs/server/app-router";
 
 export const middleware = authMiddleware
 
@@ -110,10 +105,10 @@ export const config = {
 ### Get the user in Server Components (AppRouter example)
 
 ```tsx
-import {getUser} from "@/auth";
+import {getUser} from "@propelauth/nextjs/server/app-router";
 
-const WelcomeMessage = () => {
-    const user = getUser()
+const WelcomeMessage = async () => {
+    const user = await getUser()
     
     if (user) {
         return <div>Hello {user.firstName}!</div>
@@ -124,11 +119,11 @@ const WelcomeMessage = () => {
 ```
 
 ```tsx
-import {getUserOrRedirect} from "@/auth";
+import {getUser} from "@propelauth/nextjs/server/app-router";
 
-const WelcomeMessage = () => {
+const WelcomeMessage = async () => {
     // If the user is not logged in, they will be redirected to the login page
-    const user = getUserOrRedirect()
+    const user = await getUserOrRedirect()
     
     return <div>Hello {user.firstName}!</div>
 }
@@ -138,7 +133,7 @@ const WelcomeMessage = () => {
 
 ```tsx
 import {GetServerSideProps, InferGetServerSidePropsType} from "next";
-import {getUserFromServerSideProps} from "@/auth";
+import {getUserFromServerSideProps} from "@propelauth/nextjs/server/pages";
 import {User} from "@propelauth/nextjs/client";
 
 export default function WelcomeMessage({userJson}: InferGetServerSidePropsType<typeof getServerSideProps>) {
@@ -189,7 +184,7 @@ The quick answer is:
 
 ```tsx
 // src/app/org/[slug]/page.tsx
-import {getUserOrRedirect} from "@/auth";
+import {getUserOrRedirect} from "@propelauth/nextjs/server/app-router";
 
 export default async function AdminOnlyPage({ params }: { params: { slug: string } }) {
     const user = await getUserOrRedirect()
