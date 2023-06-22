@@ -23,10 +23,11 @@ You'll need to set the following .env variables in your Next.js application:
 - PROPELAUTH_VERIFIER_KEY
 - PROPELAUTH_REDIRECT_URI
 
-You can find the env variables for your application in the PropelAuth Dashboard under **Backend Integration**.
-For the PROPELAUTH_REDIRECT_URI, you should use `{YOUR_URL}/api/auth/callback`. 
-For example, if your application is hosted at `https://myapp.com`, then your PROPELAUTH_REDIRECT_URI would be `https://myapp.com/api/auth/callback`.
-Make sure to set this in the **Frontend Integration** section of your dashboard.
+You can find the NEXT_PUBLIC_AUTH_URL, PROPELAUTH_API_KEY, and PROPELAUTH_VERIFIER_KEY variables for your application in the PropelAuth Dashboard under Backend Integration.
+
+When you copy the PROPELAUTH_VERIFIER_KEY from the PropelAuth dashboard, it will automatically paste into your .env file with line breaks. However, due to the way some systems interpret multiline environment variables, you will need to edit the verifier key value to include actual newline characters ‘\n’ instead of escaped ones.
+
+For the PROPELAUTH_REDIRECT_URI variable, you need to add /api/auth/callback to the end of one of your allowed frontend locations. So, for example, if you are developing in the test environment and using https://localhost:3000, you would use https://localhost:3000/api/auth/callback 
 
 ### 1. Set up routes
 
