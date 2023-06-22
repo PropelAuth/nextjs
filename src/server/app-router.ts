@@ -1,4 +1,4 @@
-import {toOrgIdToOrgMemberInfo, User} from "../user";
+import {toOrgIdToOrgMemberInfo} from "../user";
 import {redirect} from "next/navigation";
 import {cookies, headers} from "next/headers";
 import {NextRequest, NextResponse} from "next/server";
@@ -16,9 +16,9 @@ import {
     refreshTokenWithAccessAndRefreshToken,
     STATE_COOKIE_NAME,
     USERINFO_PATH,
-    validateAccessToken,
     validateAccessTokenOrUndefined
 } from "./shared";
+import {User} from "./index"
 
 export async function getUserOrRedirect(): Promise<User> {
     const user = await getUser()
@@ -121,7 +121,7 @@ export async function authMiddleware(req: NextRequest): Promise<Response> {
 }
 
 export type RouteHandlerArgs = {
-    postLoginRedirectPathFn?: (user: User, req: NextRequest) => string
+    postLoginRedirectPathFn?: (req: NextRequest) => string
 }
 
 export function getRouteHandlers(args?: RouteHandlerArgs) {
@@ -188,8 +188,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             const data = await response.json()
 
             const accessToken = data.access_token
-            const user = await validateAccessToken(accessToken)
-            const path = args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(user, req) : "/"
+            const path = args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : "/"
             if (!path) {
                 console.log("postLoginPathFn returned undefined")
                 return new Response("Unexpected error", {status: 500})
