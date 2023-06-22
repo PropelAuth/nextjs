@@ -1,11 +1,21 @@
 {
   "name": "@propelauth/nextjs",
-  "version": "0.0.63",
+  "version": "0.0.67",
   "exports": {
     "./server": {
       "browser": "./dist/server/index.mjs",
       "import": "./dist/server/index.mjs",
       "require": "./dist/server/index.js"
+    },
+    "./server/app-router": {
+      "browser": "./dist/server/app-router/index.mjs",
+      "import": "./dist/server/app-router/index.mjs",
+      "require": "./dist/server/app-router/index.js"
+    },
+    "./server/pages": {
+      "browser": "./dist/server/pages/index.mjs",
+      "import": "./dist/server/pages/index.mjs",
+      "require": "./dist/server/pages/index.js"
     },
     "./client": {
       "browser": "./dist/client/index.mjs",
@@ -17,6 +27,12 @@
     "*": {
       "server": [
         "./dist/server/index.d.ts"
+      ],
+      "server/app-router": [
+        "./dist/server/app-router.d.ts"
+      ],
+      "server/pages": [
+        "./dist/server/pages.d.ts"
       ],
       "client": [
         "./dist/client/index.d.ts"
@@ -32,6 +48,7 @@
     "test": "jest"
   },
   "devDependencies": {
+    "@types/node": "^20.3.1",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "tsup": "^6.7.0",
