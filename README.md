@@ -156,6 +156,21 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 }
 ```
 
+### Get the user in API Routes (Pages example)
+
+```ts
+import {NextApiRequest, NextApiResponse} from "next";
+import {getUserFromApiRouteRequest} from "@propelauth/nextjs/server/pages";
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    const user = await getUserFromApiRouteRequest(req, res)
+    if (user) {
+        res.status(200).json({email: user.email})
+    } else {
+        res.status(401).json({error: "unauthorized"})
+    }
+}
+```
 
 ### Get the user in Client Components
 
@@ -179,7 +194,7 @@ const WelcomeMessage = () => {
 
 ### Checking organization membership / RBAC
 
-Note that this works on both the client and server's `User` object, but the below example is on the server.
+Note that this works on both the client's `User` object or the client/server `UserFromToken` object, but the below example is on the server.
 
 If you are curious where the organization information comes from, check out our documentation on [organizations](https://docs.propelauth.com/overview/organizations?utm_source=github&utm_medium=library&utm_campaign=nextjs).
 The quick answer is:
@@ -264,3 +279,20 @@ import {getPropelAuthApis} from "@propelauth/nextjs/server";
 const apis = getPropelAuthApis()
 await apis.disableUser(userId)
 ```
+
+### Making a call to an external API
+
+PropelAuth also supports backend that are not Next.js. To make an [authenticated request](https://docs.propelauth.com/getting-started/making-authenticated-requests)
+to an external API, you'll need an access token. You can get an access token on the frontend from the `useUser` hook:
+
+```tsx
+import {useUser} from "@propelauth/nextjs/client";
+
+const MyComponent = () => {
+    const {loading, accessToken} = useUser()
+    
+    // Make a request to an external API with useEffect, useQuery, etc.
+}
+```
+
+Within the App Router, you can also call `getAccessToken` to get the access token.
