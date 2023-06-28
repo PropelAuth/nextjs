@@ -1,4 +1,5 @@
-import {User} from "../user";
+import {UserFromToken} from "../user";
+import {User} from "./useUser";
 
 export const USER_INFO_KEY = "__PROPEL_AUTH_USER_INFO"
 
@@ -14,7 +15,7 @@ export function saveUserToLocalStorage(user: User | undefined) {
     }
 }
 
-export function doesLocalStorageMatch(newValue: string | null, user: User | undefined): boolean {
+export function doesLocalStorageMatch(newValue: string | null, user: UserFromToken | undefined): boolean {
     if (!newValue) {
         return false
     } else if (!user) {

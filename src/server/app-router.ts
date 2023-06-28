@@ -1,4 +1,3 @@
-import {toOrgIdToOrgMemberInfo} from "../user";
 import {redirect} from "next/navigation";
 import {cookies, headers} from "next/headers";
 import {NextRequest, NextResponse} from "next/server";
@@ -16,11 +15,12 @@ import {
     refreshTokenWithAccessAndRefreshToken,
     STATE_COOKIE_NAME,
     USERINFO_PATH,
+    validateAccessToken,
     validateAccessTokenOrUndefined
 } from "./shared";
-import {User} from "./index"
+import {UserFromToken} from "./index"
 
-export async function getUserOrRedirect(): Promise<User> {
+export async function getUserOrRedirect(): Promise<UserFromToken> {
     const user = await getUser()
     if (user) {
         return user
@@ -30,7 +30,7 @@ export async function getUserOrRedirect(): Promise<User> {
     }
 }
 
-export async function getUser(): Promise<User | undefined> {
+export async function getUser(): Promise<UserFromToken | undefined> {
     const accessToken = headers().get(CUSTOM_HEADER_FOR_ACCESS_TOKEN) || cookies().get(ACCESS_TOKEN_COOKIE_NAME)?.value
     if (accessToken) {
         const user = await validateAccessTokenOrUndefined(accessToken)
@@ -39,6 +39,10 @@ export async function getUser(): Promise<User | undefined> {
         }
     }
     return undefined
+}
+
+export async function getAccessToken(): Promise<string | undefined> {
+    return headers().get(CUSTOM_HEADER_FOR_ACCESS_TOKEN) || cookies().get(ACCESS_TOKEN_COOKIE_NAME)?.value
 }
 
 // Purpose of this middleware is just to keep the access token cookie alive
@@ -220,20 +224,14 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 }
             })
             if (response.ok) {
+                const userFromToken = await validateAccessToken(accessToken)
                 const data = await response.json()
-
-                const user = new User(
-                    data.user_id,
-                    data.email,
-                    toOrgIdToOrgMemberInfo(data.org_id_to_org_info),
-                    data.first_name,
-                    data.last_name,
-                    data.username,
-                    data.legacy_user_id,
-                    data.impersonator_user_id,
-                )
-
-                return new Response(JSON.stringify(user), {
+                const jsonResponse = {
+                    userinfo: data,
+                    accessToken,
+                    impersonatorUserId: userFromToken.impersonatorUserId
+                }
+                return new Response(JSON.stringify(jsonResponse), {
                     status: 200,
                     headers: {
                         "Content-Type": "application/json",

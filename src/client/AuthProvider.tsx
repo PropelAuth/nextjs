@@ -1,13 +1,14 @@
 'use client'
 
 import React, {useCallback, useEffect, useReducer} from "react"
-import {User} from "../user"
 import {doesLocalStorageMatch, hasWindow, isEqual, saveUserToLocalStorage, USER_INFO_KEY} from "./utils";
 import {useRouter} from "next/navigation";
+import {User} from "./useUser";
+import {toOrgIdToOrgMemberInfo} from "../user";
 
 interface InternalAuthState {
     loading: boolean
-    user?: User
+    userAndAccessToken: UserAndAccessToken
 
     logout: () => Promise<void>
 
@@ -40,9 +41,17 @@ export type AuthProviderProps = {
 
 export const AuthContext = React.createContext<InternalAuthState | undefined>(undefined)
 
+type UserAndAccessToken = {
+    user: User
+    accessToken: string
+} | {
+    user: undefined
+    accessToken: undefined
+}
+
 type AuthState = {
     loading: boolean
-    user?: User
+    userAndAccessToken: UserAndAccessToken
 
     // There's no good way to trigger server components to reload outside of router.refresh()
     // This is our workaround until the app router has something better
@@ -51,33 +60,49 @@ type AuthState = {
 
 const initialAuthState = {
     loading: true,
-    user: undefined,
+    userAndAccessToken: {
+        user: undefined,
+        accessToken: undefined,
+    },
     authChangeDetected: false,
 }
 
 type AuthStateAction = {
-    user?: User
+    user: User
+    accessToken: string
+} | {
+    user: undefined
+    accessToken: undefined
 }
 
 function authStateReducer(_state: AuthState, action: AuthStateAction): AuthState {
-    const authChangeDetected = !_state.loading && !isEqual(action.user, _state.user)
+    const authChangeDetected = !_state.loading && !isEqual(action.user, _state.userAndAccessToken.user)
 
     if (!action.user) {
         return {
             loading: false,
-            user: undefined,
+            userAndAccessToken: {
+                user: undefined,
+                accessToken: undefined,
+            },
             authChangeDetected,
         }
     } else if (_state.loading) {
         return {
             loading: false,
-            user: action.user,
+            userAndAccessToken: {
+                user: action.user,
+                accessToken: action.accessToken,
+            },
             authChangeDetected,
         }
     } else {
         return {
             loading: false,
-            user: action.user,
+            userAndAccessToken: {
+                user: action.user,
+                accessToken: action.accessToken,
+            },
             authChangeDetected
         }
     }
@@ -105,9 +130,9 @@ export const AuthProvider = (props: AuthProviderProps) => {
         let didCancel = false
 
         async function refreshAuthInfo() {
-            const {user} = await apiGetUserInfo()
+            const action = await apiGetUserInfo()
             if (!didCancel) {
-                dispatch({user})
+                dispatch(action)
             }
         }
 
@@ -123,14 +148,14 @@ export const AuthProvider = (props: AuthProviderProps) => {
         let didCancel = false
 
         async function refreshToken() {
-            const {user} = await apiGetUserInfo()
+            const action = await apiGetUserInfo()
             if (!didCancel) {
-                dispatch({user})
+                dispatch(action)
             }
         }
 
         async function onStorageEvent(event: StorageEvent) {
-            if (event.key === USER_INFO_KEY && !doesLocalStorageMatch(event.newValue, authState.user)) {
+            if (event.key === USER_INFO_KEY && !doesLocalStorageMatch(event.newValue, authState.userAndAccessToken.user)) {
                 await refreshToken()
             }
         }
@@ -153,7 +178,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
                 window.removeEventListener("focus", refreshToken)
             }
         }
-    }, [dispatch, authState.user])
+    }, [dispatch, authState.userAndAccessToken.user])
 
 
     const logout = useCallback(async () => {
@@ -164,7 +189,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
             },
             credentials: "include",
         })
-        dispatch({user: undefined})
+        dispatch({user: undefined, accessToken: undefined})
     }, [dispatch])
 
     const getLoginPageUrl = () => "/api/auth/login"
@@ -205,14 +230,14 @@ export const AuthProvider = (props: AuthProviderProps) => {
     const redirectToSetupSAMLPage = (orgId: string) => redirectTo(getSetupSAMLPageUrl(orgId))
 
     const refreshAuthInfo = async () => {
-        const {user} = await apiGetUserInfo()
-        dispatch({user})
-        return user
+        const action = await apiGetUserInfo()
+        dispatch(action)
+        return action.user
     }
 
     const value = {
         loading: authState.loading,
-        user: authState.user,
+        userAndAccessToken: authState.userAndAccessToken,
         logout,
         redirectToLoginPage,
         redirectToSignupPage,
@@ -231,7 +256,13 @@ export const AuthProvider = (props: AuthProviderProps) => {
     return <AuthContext.Provider value={value}>{props.children}</AuthContext.Provider>
 }
 
-type UserInfoResponse = { user?: User }
+type UserInfoResponse = {
+    user: User
+    accessToken: string
+} | {
+    user: undefined
+    accessToken: undefined
+}
 
 async function apiGetUserInfo(): Promise<UserInfoResponse> {
     try {
@@ -244,11 +275,28 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
         })
 
         if (userInfoResponse.ok) {
-            const userJson = await userInfoResponse.text()
-            const user = User.fromJSON(userJson)
-            return {user}
+            const {userinfo, accessToken, impersonatorUserId} = await userInfoResponse.json()
+            const user = new User({
+                userId: userinfo.user_id,
+                email: userinfo.email,
+                emailConfirmed: userinfo.email_confirmed,
+                hasPassword: userinfo.has_password,
+                username: userinfo.username,
+                firstName: userinfo.first_name,
+                lastName: userinfo.last_name,
+                pictureUrl: userinfo.picture_url,
+                orgIdToOrgMemberInfo: toOrgIdToOrgMemberInfo(userinfo.org_id_to_org_member_info),
+                mfaEnabled: userinfo.mfa_enabled,
+                canCreateOrgs: userinfo.can_create_orgs,
+                updatePasswordRequired: userinfo.update_password_required,
+                createdAt: userinfo.created_at,
+                lastActiveAt: userinfo.last_active_at,
+                impersonatorUserId,
+            })
+
+            return {user, accessToken}
         } else if (userInfoResponse.status === 401) {
-            return {user: undefined}
+            return {user: undefined, accessToken: undefined}
         } else {
             console.log("Failed to refresh token", userInfoResponse)
         }

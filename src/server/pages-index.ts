@@ -1,1 +1,1 @@
-export {getUserFromServerSideProps} from "./pages"
+export {getUserFromServerSideProps, getUserFromApiRouteRequest} from "./pages"

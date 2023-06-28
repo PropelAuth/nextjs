@@ -1,5 +1,5 @@
 import {ResponseCookie} from "next/dist/compiled/@edge-runtime/cookies";
-import {InternalUser, toUser, User} from "../user";
+import {InternalUser, toUser, UserFromToken} from "../user";
 import {ConfigurationException, UnauthorizedException} from "./exceptions";
 import * as jose from "jose";
 
@@ -108,7 +108,7 @@ export async function refreshTokenWithAccessAndRefreshToken(refreshToken: string
     }
 }
 
-export async function validateAccessTokenOrUndefined(accessToken: string | undefined): Promise<User | undefined> {
+export async function validateAccessTokenOrUndefined(accessToken: string | undefined): Promise<UserFromToken | undefined> {
     try {
         return await validateAccessToken(accessToken)
     } catch (err) {
@@ -123,7 +123,7 @@ export async function validateAccessTokenOrUndefined(accessToken: string | undef
     }
 }
 
-export async function validateAccessToken(accessToken: string | undefined): Promise<User> {
+export async function validateAccessToken(accessToken: string | undefined): Promise<UserFromToken> {
     let publicKey
     try {
         publicKey = await jose.importSPKI(getVerifierKey(), "RS256")

@@ -1,4 +1,4 @@
-export class User {
+export class UserFromToken {
     public userId: string
     public orgIdToOrgMemberInfo?: OrgIdToOrgMemberInfo
 
@@ -71,7 +71,7 @@ export class User {
         return !!this.impersonatorUserId
     }
 
-    public static fromJSON(json: string): User {
+    public static fromJSON(json: string): UserFromToken {
         const obj = JSON.parse(json)
         const orgIdToOrgMemberInfo: OrgIdToOrgMemberInfo = {}
         for (const orgId in obj.orgIdToOrgMemberInfo) {
@@ -79,7 +79,7 @@ export class User {
                 JSON.stringify(obj.orgIdToOrgMemberInfo[orgId])
             )
         }
-        return new User(
+        return new UserFromToken(
             obj.userId,
             obj.email,
             orgIdToOrgMemberInfo,
@@ -196,8 +196,8 @@ export type InternalUser = {
     impersonatorUserId?: string
 }
 
-export function toUser(snake_case: InternalUser): User {
-    return new User(
+export function toUser(snake_case: InternalUser): UserFromToken {
+    return new UserFromToken(
         snake_case.user_id,
         snake_case.email,
         toOrgIdToOrgMemberInfo(snake_case.org_id_to_org_member_info),
