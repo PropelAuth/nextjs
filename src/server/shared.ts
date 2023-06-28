@@ -39,11 +39,15 @@ export const COOKIE_OPTIONS: Partial<ResponseCookie> = {
 }
 
 export function getAuthUrlOrigin() {
+    return getAuthUrl().origin
+}
+
+export function getAuthUrl() {
     const authUrl = process.env.NEXT_PUBLIC_AUTH_URL
     if (!authUrl) {
         throw new Error("NEXT_PUBLIC_AUTH_URL is not set")
     }
-    return new URL(authUrl).origin
+    return new URL(authUrl)
 }
 
 export function getRedirectUri() {
