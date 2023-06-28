@@ -285,7 +285,7 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
                 firstName: userinfo.first_name,
                 lastName: userinfo.last_name,
                 pictureUrl: userinfo.picture_url,
-                orgIdToOrgMemberInfo: toOrgIdToOrgMemberInfo(userinfo.org_id_to_org_member_info),
+                orgIdToOrgMemberInfo: toOrgIdToOrgMemberInfo(userinfo.org_id_to_org_info),
                 mfaEnabled: userinfo.mfa_enabled,
                 canCreateOrgs: userinfo.can_create_orgs,
                 updatePasswordRequired: userinfo.update_password_required,
