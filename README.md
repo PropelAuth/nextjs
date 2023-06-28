@@ -4,7 +4,7 @@
 
 This library provides a simple way to integrate your Next.js application (either AppRouter or Pages) with PropelAuth.
 
-Next.js SSR/AppRouter support is in beta, while in beta, you'll need to reach out to support@propelauth.com to have this enabled for your account. 
+Next.js SSR/AppRouter support is currently in beta.
 
 ## Installation
 
@@ -40,7 +40,6 @@ In your `src/app/api/auth/[slug]` directory, create a file called `route.ts` wit
 
 ```typescript
 import {getRouteHandlers} from "@propelauth/nextjs/server/app-router";
-import {User} from "@propelauth/nextjs/server";
 import {NextRequest} from "next/server";
 
 // postLoginRedirectPathFn is optional, but if you want to redirect the user to a different page after login, you can do so here.
@@ -55,7 +54,7 @@ export const POST = routeHandlers.postRouteHandler
 
 ### 2. Set up AuthProvider 
 
-#### AppRouter Version
+#### App Router 
 
 In your root layout, `src/app/layout.tsx`, add the `AuthProvider`:
 
@@ -71,7 +70,7 @@ export default async function RootLayout({children}: {children: React.ReactNode}
 }
 ```
 
-#### Pages Version
+#### Pages Router
 
 In your `_app.tsx` file, add the `AuthProvider`:
 
@@ -85,7 +84,7 @@ export default function MyApp({Component, pageProps}: AppProps) {
 }
 ```
 
-### 3. Set up middleware (AppRouter only - skip if using Pages)
+### 3. Set up middleware (App Router only - skip if using Pages)
 
 In your `src/middleware.ts` file, add the following:
 
@@ -108,7 +107,7 @@ export const config = {
 
 ## Usage
 
-### Get the user in Server Components (AppRouter example)
+### Get the user in Server Components (App Router example)
 
 ```tsx
 import {getUser} from "@propelauth/nextjs/server/app-router";
@@ -125,7 +124,7 @@ const WelcomeMessage = async () => {
 ```
 
 ```tsx
-import {getUser} from "@propelauth/nextjs/server/app-router";
+import {getUserOrRedirect} from "@propelauth/nextjs/server/app-router";
 
 const WelcomeMessage = async () => {
     // If the user is not logged in, they will be redirected to the login page
@@ -253,4 +252,15 @@ export default function AccountAndOrgButtons() {
         <button onClick={redirectToOrgPage}>Organization</button>
     </>
 }
+```
+
+### Using APIs
+
+You can use our [APIs](https://docs.propelauth.com/reference/backend-apis/node) like so:
+
+```ts
+import {getPropelAuthApis} from "@propelauth/nextjs/server";
+
+const apis = getPropelAuthApis()
+await apis.disableUser(userId)
 ```
