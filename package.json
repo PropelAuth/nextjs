@@ -1,43 +1,36 @@
 {
   "name": "@propelauth/nextjs",
-  "version": "0.0.80",
+  "version": "0.0.86",
   "exports": {
     "./server": {
       "browser": "./dist/server/index.mjs",
       "import": "./dist/server/index.mjs",
-      "require": "./dist/server/index.js"
+      "require": "./dist/server/index.js",
+      "default": "./dist/server/index.mjs",
+      "types": "./dist/server/index.d.ts"
     },
     "./server/app-router": {
       "browser": "./dist/server/app-router/index.mjs",
       "import": "./dist/server/app-router/index.mjs",
-      "require": "./dist/server/app-router/index.js"
+      "require": "./dist/server/app-router/index.js",
+      "default": "./dist/server/app-router/index.mjs",
+      "types": "./dist/server/app-router/index.d.ts"
     },
     "./server/pages": {
       "browser": "./dist/server/pages/index.mjs",
       "import": "./dist/server/pages/index.mjs",
-      "require": "./dist/server/pages/index.js"
+      "require": "./dist/server/pages/index.js",
+      "default": "./dist/server/pages/index.mjs",
+      "types": "./dist/server/pages/index.d.ts"
     },
     "./client": {
       "browser": "./dist/client/index.mjs",
       "import": "./dist/client/index.mjs",
-      "require": "./dist/client/index.js"
-    }
-  },
-  "typesVersions": {
-    "*": {
-      "server": [
-        "./dist/server/index.d.ts"
-      ],
-      "server/app-router": [
-        "./dist/server/app-router/index.d.ts"
-      ],
-      "server/pages": [
-        "./dist/server/pages/index.d.ts"
-      ],
-      "client": [
-        "./dist/client/index.d.ts"
-      ]
-    }
+      "require": "./dist/client/index.js",
+      "default": "./dist/client/index.mjs",
+      "types": "./dist/client/index.d.ts"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist"
