@@ -2,7 +2,7 @@
 
 import React, {useCallback, useEffect, useReducer} from "react"
 import {doesLocalStorageMatch, hasWindow, isEqual, saveUserToLocalStorage, USER_INFO_KEY} from "./utils";
-import {useRouter} from "next/navigation";
+import {useRouter} from "next/navigation.js";
 import {User} from "./useUser";
 import {toOrgIdToOrgMemberInfo} from "../user";
 
