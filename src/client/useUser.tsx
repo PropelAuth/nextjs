@@ -24,6 +24,8 @@ export class User {
     public createdAt: number
     public lastActiveAt: number
 
+    public properties?: {[key: string]: unknown}
+
     public legacyUserId?: string
     public impersonatorUserId?: string
 
@@ -43,6 +45,7 @@ export class User {
                     createdAt,
                     lastActiveAt,
                     legacyUserId,
+                    properties,
                     impersonatorUserId,
                 }: {
         userId: string
@@ -60,6 +63,7 @@ export class User {
         createdAt: number
         lastActiveAt: number
         legacyUserId?: string
+        properties?: {[key: string]: unknown}
         impersonatorUserId?: string
     }) {
         this.userId = userId
@@ -77,6 +81,7 @@ export class User {
         this.createdAt = createdAt
         this.lastActiveAt = lastActiveAt
         this.legacyUserId = legacyUserId
+        this.properties = properties
         this.impersonatorUserId = impersonatorUserId
     }
 

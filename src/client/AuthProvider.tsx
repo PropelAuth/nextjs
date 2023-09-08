@@ -291,6 +291,7 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
                 updatePasswordRequired: userinfo.update_password_required,
                 createdAt: userinfo.created_at,
                 lastActiveAt: userinfo.last_active_at,
+                properties: userinfo.properties,
                 impersonatorUserId,
             })
 
