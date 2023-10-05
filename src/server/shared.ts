@@ -101,7 +101,7 @@ export async function refreshTokenWithAccessAndRefreshToken(refreshToken: string
             accessToken,
             error: "none",
         }
-    } else if (response.status === 400) {
+    } else if (response.status === 400 || response.status === 401) {
         return {error: "unauthorized"}
     } else {
         return {error: "unexpected"}
