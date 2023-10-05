@@ -272,7 +272,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
         const refreshResponse = await refreshTokenWithAccessAndRefreshToken(refreshToken)
         if (refreshResponse.error === "unexpected") {
-            console.log("Unexpected error while refreshing access token")
+            console.error("Unexpected error while refreshing access token")
             return new Response("Unexpected error", {status: 500})
         } else if (refreshResponse.error === "unauthorized") {
             const headers = new Headers()
