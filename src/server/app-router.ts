@@ -137,7 +137,6 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
     async function callbackGetHandler(req: NextRequest) {
         const oauthState = req.cookies.get(STATE_COOKIE_NAME)?.value
         if (!oauthState || oauthState.length !== 64) {
-            console.log("No oauth state found")
             return new Response(null, {status: 302, headers: {Location: LOGIN_PATH}})
         }
 
@@ -145,7 +144,6 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         const state = queryParams.get("state")
         const code = queryParams.get("code")
         if (state !== oauthState) {
-            console.log("Mismatch between states, redirecting to login")
             return new Response(null, {status: 302, headers: {Location: LOGIN_PATH}})
         }
 
@@ -249,6 +247,52 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         return new Response(null, {status: 401})
     }
 
+    async function logoutGetHandler(req: NextRequest) {
+        // Real logout requests will go to the logout POST handler
+        // This endpoint is a landing page for when people logout from the hosted UIs
+        // Instead of doing a logout we'll check the refresh token.
+        // If it's invalid, we'll clear the cookies and redirect using the postLoginRedirectPathFn
+        const path = args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : "/"
+        if (!path) {
+            console.log("postLoginPathFn returned undefined")
+            return new Response("Unexpected error", {status: 500})
+        }
+
+        const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
+        if (!refreshToken) {
+            const headers = new Headers()
+            headers.append("Location", path)
+            headers.append("Set-Cookie", `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
+            headers.append("Set-Cookie", `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
+            return new Response(null, {
+                status: 302,
+                headers
+            })
+        }
+
+        const refreshResponse = await refreshTokenWithAccessAndRefreshToken(refreshToken)
+        if (refreshResponse.error === "unexpected") {
+            console.log("Unexpected error while refreshing access token")
+            return new Response("Unexpected error", {status: 500})
+        } else if (refreshResponse.error === "unauthorized") {
+            const headers = new Headers()
+            headers.append("Location", path)
+            headers.append("Set-Cookie", `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
+            headers.append("Set-Cookie", `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
+            return new Response(null, {
+                status: 302,
+                headers
+            })
+        } else {
+            const headers = new Headers()
+            headers.append("Location", path)
+            return new Response(null, {
+                status: 302,
+                headers
+            })
+        }
+    }
+
     async function logoutPostHandler(req: NextRequest) {
         const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
         if (!refreshToken) {
@@ -291,6 +335,8 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             return callbackGetHandler(req)
         } else if (params.slug === "userinfo") {
             return userinfoGetHandler(req)
+        } else if (params.slug === "logout") {
+            return logoutGetHandler(req)
         } else {
             return new Response("", {status: 404})
         }
