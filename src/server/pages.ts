@@ -6,12 +6,12 @@ import {
     validateAccessTokenOrUndefined
 } from "./shared";
 
-export async function getUserFromServerSideProps(props: GetServerSidePropsContext) {
+export async function getUserFromServerSideProps(props: GetServerSidePropsContext, forceRefresh: boolean = false) {
     const accessToken = props.req.cookies[ACCESS_TOKEN_COOKIE_NAME]
     const refreshToken = props.req.cookies[REFRESH_TOKEN_COOKIE_NAME]
 
     // If we are authenticated, we can continue
-    if (accessToken) {
+    if (accessToken && !forceRefresh) {
         const user = await validateAccessTokenOrUndefined(accessToken)
         if (user) {
             return user
