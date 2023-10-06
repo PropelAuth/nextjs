@@ -30,7 +30,6 @@ export function doesLocalStorageMatch(newValue: string | null, user: UserFromTok
     return isEqual(parsed, user)
 }
 
-
 export function isEqual(a: any, b: any): boolean {
     if (typeof a !== typeof b) {
         return false

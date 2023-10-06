@@ -36,6 +36,7 @@ interface InternalAuthState {
 
 export type AuthProviderProps = {
     authUrl: string
+    reloadOnAuthChange?: boolean
     children?: React.ReactNode
 }
 
@@ -76,7 +77,9 @@ type AuthStateAction = {
 }
 
 function authStateReducer(_state: AuthState, action: AuthStateAction): AuthState {
-    const authChangeDetected = !_state.loading && !isEqual(action.user, _state.userAndAccessToken.user)
+    const newUserForEqualityChecking = {...action.user, lastActiveAt: undefined}
+    const existingUserForEqualityChecking = {..._state.userAndAccessToken.user, lastActiveAt: undefined}
+    const authChangeDetected = !_state.loading && !isEqual(newUserForEqualityChecking, existingUserForEqualityChecking)
 
     if (!action.user) {
         return {
@@ -111,6 +114,7 @@ function authStateReducer(_state: AuthState, action: AuthStateAction): AuthState
 export const AuthProvider = (props: AuthProviderProps) => {
     const [authState, dispatchInner] = useReducer(authStateReducer, initialAuthState)
     const router = useRouter()
+    const reloadOnAuthChange = props.reloadOnAuthChange ?? true
 
     const dispatch = useCallback((action: AuthStateAction) => {
         dispatchInner(action)
@@ -120,10 +124,10 @@ export const AuthProvider = (props: AuthProviderProps) => {
     // This is because we don't have a good way to trigger server components to reload outside of router.refresh()
     // Once server actions isn't alpha, we can hopefully use that instead
     useEffect(() => {
-        if (authState.authChangeDetected) {
+        if (reloadOnAuthChange && authState.authChangeDetected) {
             router.refresh()
         }
-    }, [authState.authChangeDetected, router])
+    }, [authState.authChangeDetected, reloadOnAuthChange, router])
 
     // Trigger an initial refresh
     useEffect(() => {
