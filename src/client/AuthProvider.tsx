@@ -6,29 +6,31 @@ import {useRouter} from "next/navigation.js";
 import {User} from "./useUser";
 import {toOrgIdToOrgMemberInfo} from "../user";
 
+export interface RedirectToSignupOptions {
+    postSignupRedirectPath: string;
+}
+export interface RedirectToLoginOptions {
+    postLoginRedirectPath: string;
+}
+
 interface InternalAuthState {
     loading: boolean
     userAndAccessToken: UserAndAccessToken
 
     logout: () => Promise<void>
 
-    redirectToLoginPage: () => void
-    redirectToSignupPage: () => void
+    redirectToLoginPage: (opts?: RedirectToLoginOptions) => void
+    redirectToSignupPage: (opts?: RedirectToSignupOptions) => void
     redirectToAccountPage: () => void
     redirectToOrgPage: (orgId?: string) => void
     redirectToCreateOrgPage: () => void
     redirectToSetupSAMLPage: (orgId: string) => void
 
-    getSignupPageUrl(): string
-
-    getLoginPageUrl(): string
-
+    getSignupPageUrl(opts?: RedirectToSignupOptions): string
+    getLoginPageUrl(opts?: RedirectToLoginOptions): string
     getAccountPageUrl(): string
-
     getOrgPageUrl(orgId?: string): string
-
     getCreateOrgPageUrl(): string
-
     getSetupSAMLPageUrl(orgId: string): string
 
     refreshAuthInfo: () => Promise<User | undefined>
@@ -196,8 +198,20 @@ export const AuthProvider = (props: AuthProviderProps) => {
         dispatch({user: undefined, accessToken: undefined})
     }, [dispatch])
 
-    const getLoginPageUrl = () => "/api/auth/login"
-    const getSignupPageUrl = () => "/api/auth/signup"
+    const getLoginPageUrl = (opts?: RedirectToLoginOptions) => {
+        if (opts?.postLoginRedirectPath) {
+            return `/api/auth/login?return_to_path=${encodeURIComponent(opts.postLoginRedirectPath)}`
+        }
+
+        return "/api/auth/login"
+    }
+    const getSignupPageUrl = (opts?: RedirectToSignupOptions) => {
+        if (opts?.postSignupRedirectPath) {
+            return `/api/auth/signup?return_to_path=${encodeURIComponent(opts.postSignupRedirectPath)}`
+        }
+
+        return "/api/auth/signup"
+    }
     const getAccountPageUrl = useCallback(() => {
         return `${props.authUrl}/account`
     }, [props.authUrl])
@@ -226,8 +240,8 @@ export const AuthProvider = (props: AuthProviderProps) => {
         window.location.href = url
     }
 
-    const redirectToLoginPage = () => redirectTo(getLoginPageUrl())
-    const redirectToSignupPage = () => redirectTo(getSignupPageUrl())
+    const redirectToLoginPage = (opts?: RedirectToLoginOptions) => redirectTo(getLoginPageUrl(opts))
+    const redirectToSignupPage = (opts?: RedirectToSignupOptions) => redirectTo(getSignupPageUrl(opts))
     const redirectToAccountPage = () => redirectTo(getAccountPageUrl())
     const redirectToOrgPage = (orgId?: string) => redirectTo(getOrgPageUrl(orgId))
     const redirectToCreateOrgPage = () => redirectTo(getCreateOrgPageUrl())
@@ -303,10 +317,10 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
         } else if (userInfoResponse.status === 401) {
             return {user: undefined, accessToken: undefined}
         } else {
-            console.log("Failed to refresh token", userInfoResponse)
+            console.info("Failed to refresh token", userInfoResponse)
         }
     } catch (e) {
-        console.log("Failed to refresh token", e)
+        console.info("Failed to refresh token", e)
     }
     throw new Error("Failed to refresh token")
 }

@@ -13,6 +13,7 @@ import {
     LOGOUT_PATH,
     REFRESH_TOKEN_COOKIE_NAME,
     refreshTokenWithAccessAndRefreshToken,
+    RETURN_TO_PATH_COOKIE_NAME,
     STATE_COOKIE_NAME,
     USERINFO_PATH,
     validateAccessToken,
@@ -108,29 +109,40 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
     const redirectUri = getRedirectUri()
     const integrationApiKey = getIntegrationApiKey()
 
-    function loginGetHandler() {
-        const state = randomState()
-        const authorize_url =
-            authUrlOrigin + "/propelauth/ssr/authorize?redirect_uri=" + redirectUri + "&state=" + state
-        return new Response(null, {
-            status: 302,
-            headers: {
-                Location: authorize_url,
-                "Set-Cookie": `${STATE_COOKIE_NAME}=${state}; Path=/; HttpOnly; Secure; SameSite=Lax`,
-            }
-        })
+    function loginGetHandler(req: NextRequest) {
+        return signupOrLoginHandler(req, false)
     }
 
-    function signupGetHandler() {
+    function signupGetHandler(req: NextRequest) {
+        return signupOrLoginHandler(req, true)
+    }
+
+    function signupOrLoginHandler(req: NextRequest, isSignup: boolean) {
+        const returnToPath = req.nextUrl.searchParams.get("return_to_path")
         const state = randomState()
+
+        const authorizeUrlSearchParams = new URLSearchParams({
+            redirect_uri: redirectUri,
+            state,
+            signup: isSignup ? "true" : "false"
+        })
         const authorize_url =
-            getAuthUrlOrigin() + "/propelauth/ssr/authorize?redirect_uri=" + redirectUri + "&state=" + state + "&signup=true"
+            getAuthUrlOrigin() + "/propelauth/ssr/authorize?" + authorizeUrlSearchParams.toString()
+
+        const headers = new Headers();
+        headers.append("Location", authorize_url);
+        headers.append("Set-Cookie", `${STATE_COOKIE_NAME}=${state}; Path=/; HttpOnly; Secure; SameSite=Lax`);
+        if (returnToPath) {
+            if (returnToPath.startsWith("/")) {
+                headers.append("Set-Cookie", `${RETURN_TO_PATH_COOKIE_NAME}=${returnToPath}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
+            } else {
+                console.warn("return_to_path must start with /")
+            }
+        }
+
         return new Response(null, {
             status: 302,
-            headers: {
-                Location: authorize_url,
-                "Set-Cookie": `${STATE_COOKIE_NAME}=${state}; Path=/; HttpOnly; Secure; SameSite=Lax`,
-            }
+            headers
         })
     }
 
@@ -165,16 +177,21 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             const data = await response.json()
 
             const accessToken = data.access_token
-            const path = args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : "/"
-            if (!path) {
-                console.log("postLoginPathFn returned undefined")
+
+            // If we have a return_to_path cookie, we'll use that
+            // Otherwise, we'll use the postLoginRedirectPathFn
+            const returnToPathFromCookie = req.cookies.get(RETURN_TO_PATH_COOKIE_NAME)?.value;
+            const returnToPath = returnToPathFromCookie ?? (args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : "/")
+            if (!returnToPath) {
+                console.error("postLoginRedirectPathFn returned undefined")
                 return new Response("Unexpected error", {status: 500})
             }
 
             const headers = new Headers()
-            headers.append("Location", path)
+            headers.append("Location", returnToPath)
             headers.append("Set-Cookie", `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`)
             headers.append("Set-Cookie", `${REFRESH_TOKEN_COOKIE_NAME}=${data.refresh_token}; Path=/; HttpOnly; Secure; SameSite=Lax`)
+            headers.append("Set-Cookie", `${RETURN_TO_PATH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
             return new Response(null, {
                 status: 302,
                 headers
@@ -254,7 +271,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         // If it's invalid, we'll clear the cookies and redirect using the postLoginRedirectPathFn
         const path = args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : "/"
         if (!path) {
-            console.log("postLoginPathFn returned undefined")
+            console.error("postLoginPathFn returned undefined")
             return new Response("Unexpected error", {status: 500})
         }
 
@@ -314,7 +331,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         })
 
         if (!response.ok) {
-            console.log(
+            console.warn(
                 "Unable to logout, clearing cookies and continuing anyway",
                 response.status,
                 response.statusText
@@ -328,9 +345,9 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
     function getRouteHandler(req: NextRequest, {params}: { params: { slug: string } }) {
         if (params.slug === "login") {
-            return loginGetHandler()
+            return loginGetHandler(req)
         } else if (params.slug === "signup") {
-            return signupGetHandler()
+            return signupGetHandler(req)
         } else if (params.slug === "callback") {
             return callbackGetHandler(req)
         } else if (params.slug === "userinfo") {
