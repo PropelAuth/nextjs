@@ -201,16 +201,16 @@ export const AuthProvider = (props: AuthProviderProps) => {
     const getLoginPageUrl = (opts?: RedirectToLoginOptions) => {
         if (opts?.postLoginRedirectPath) {
             return `/api/auth/login?return_to_path=${encodeURIComponent(opts.postLoginRedirectPath)}`
-        } else {
-            return "/api/auth/login"
         }
+
+        return "/api/auth/login"
     }
     const getSignupPageUrl = (opts?: RedirectToSignupOptions) => {
         if (opts?.postSignupRedirectPath) {
             return `/api/auth/signup?return_to_path=${encodeURIComponent(opts.postSignupRedirectPath)}`
-        } else {
-            return "/api/auth/signup"
         }
+
+        return "/api/auth/signup"
     }
     const getAccountPageUrl = useCallback(() => {
         return `${props.authUrl}/account`
@@ -317,10 +317,10 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
         } else if (userInfoResponse.status === 401) {
             return {user: undefined, accessToken: undefined}
         } else {
-            console.log("Failed to refresh token", userInfoResponse)
+            console.info("Failed to refresh token", userInfoResponse)
         }
     } catch (e) {
-        console.log("Failed to refresh token", e)
+        console.info("Failed to refresh token", e)
     }
     throw new Error("Failed to refresh token")
 }

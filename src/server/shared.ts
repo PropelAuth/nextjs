@@ -118,7 +118,7 @@ export async function validateAccessTokenOrUndefined(accessToken: string | undef
         } else if (err instanceof UnauthorizedException) {
             return undefined
         } else {
-            console.log("Error validating access token", err)
+            console.info("Error validating access token", err)
             return undefined
         }
     }

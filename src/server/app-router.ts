@@ -183,7 +183,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             const returnToPathFromCookie = req.cookies.get(RETURN_TO_PATH_COOKIE_NAME)?.value;
             const returnToPath = returnToPathFromCookie ?? (args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : "/")
             if (!returnToPath) {
-                console.log("postLoginRedirectPathFn returned undefined")
+                console.error("postLoginRedirectPathFn returned undefined")
                 return new Response("Unexpected error", {status: 500})
             }
 
@@ -271,7 +271,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         // If it's invalid, we'll clear the cookies and redirect using the postLoginRedirectPathFn
         const path = args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : "/"
         if (!path) {
-            console.log("postLoginPathFn returned undefined")
+            console.error("postLoginPathFn returned undefined")
             return new Response("Unexpected error", {status: 500})
         }
 
@@ -331,7 +331,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         })
 
         if (!response.ok) {
-            console.log(
+            console.warn(
                 "Unable to logout, clearing cookies and continuing anyway",
                 response.status,
                 response.statusText
