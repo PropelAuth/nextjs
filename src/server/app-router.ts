@@ -197,6 +197,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 headers
             })
         } else if (response.status === 401) {
+            console.error("Couldn't finish the login process for this user. This is most likely caused by an incorrect PROPELAUTH_API_KEY.")
             return new Response("Unexpected error", {status: 500})
         } else {
             return new Response("Unexpected error", {status: 500})
