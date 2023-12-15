@@ -102,9 +102,9 @@ export class OrgMemberInfo {
     public orgMetadata: { [key: string]: any }
     public urlSafeOrgName: string
 
-    private userAssignedRole: string
-    private userInheritedRolesPlusCurrentRole: string[]
-    private userPermissions: string[]
+    public userAssignedRole: string
+    public userInheritedRolesPlusCurrentRole: string[]
+    public userPermissions: string[]
 
     constructor(
         orgId: string,
