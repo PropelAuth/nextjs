@@ -1,16 +1,18 @@
 'use client'
 
-import React, {useCallback, useEffect, useReducer} from "react"
-import {doesLocalStorageMatch, hasWindow, isEqual, saveUserToLocalStorage, USER_INFO_KEY} from "./utils";
-import {useRouter} from "next/navigation.js";
-import {User} from "./useUser";
-import {toOrgIdToOrgMemberInfo} from "../user";
+import React, { useCallback, useEffect, useReducer } from 'react'
+import { doesLocalStorageMatch, hasWindow, isEqual, saveUserToLocalStorage, USER_INFO_KEY } from './utils'
+import { useRouter } from 'next/navigation.js'
+import { User } from './useUser'
+import { toOrgIdToOrgMemberInfo } from '../user'
 
 export interface RedirectToSignupOptions {
-    postSignupRedirectPath: string;
+    postSignupRedirectPath?: string
+    userSignupQueryParameters?: Record<string, string>
 }
 export interface RedirectToLoginOptions {
-    postLoginRedirectPath: string;
+    postLoginRedirectPath?: string
+    userSignupQueryParameters?: Record<string, string>
 }
 
 interface InternalAuthState {
@@ -44,13 +46,15 @@ export type AuthProviderProps = {
 
 export const AuthContext = React.createContext<InternalAuthState | undefined>(undefined)
 
-type UserAndAccessToken = {
-    user: User
-    accessToken: string
-} | {
-    user: undefined
-    accessToken: undefined
-}
+type UserAndAccessToken =
+    | {
+          user: User
+          accessToken: string
+      }
+    | {
+          user: undefined
+          accessToken: undefined
+      }
 
 type AuthState = {
     loading: boolean
@@ -70,17 +74,19 @@ const initialAuthState = {
     authChangeDetected: false,
 }
 
-type AuthStateAction = {
-    user: User
-    accessToken: string
-} | {
-    user: undefined
-    accessToken: undefined
-}
+type AuthStateAction =
+    | {
+          user: User
+          accessToken: string
+      }
+    | {
+          user: undefined
+          accessToken: undefined
+      }
 
 function authStateReducer(_state: AuthState, action: AuthStateAction): AuthState {
-    const newUserForEqualityChecking = {...action.user, lastActiveAt: undefined}
-    const existingUserForEqualityChecking = {..._state.userAndAccessToken.user, lastActiveAt: undefined}
+    const newUserForEqualityChecking = { ...action.user, lastActiveAt: undefined }
+    const existingUserForEqualityChecking = { ..._state.userAndAccessToken.user, lastActiveAt: undefined }
     const authChangeDetected = !_state.loading && !isEqual(newUserForEqualityChecking, existingUserForEqualityChecking)
 
     if (!action.user) {
@@ -108,7 +114,7 @@ function authStateReducer(_state: AuthState, action: AuthStateAction): AuthState
                 user: action.user,
                 accessToken: action.accessToken,
             },
-            authChangeDetected
+            authChangeDetected,
         }
     }
 }
@@ -118,10 +124,13 @@ export const AuthProvider = (props: AuthProviderProps) => {
     const router = useRouter()
     const reloadOnAuthChange = props.reloadOnAuthChange ?? true
 
-    const dispatch = useCallback((action: AuthStateAction) => {
-        dispatchInner(action)
-        saveUserToLocalStorage(action.user)
-    }, [dispatchInner])
+    const dispatch = useCallback(
+        (action: AuthStateAction) => {
+            dispatchInner(action)
+            saveUserToLocalStorage(action.user)
+        },
+        [dispatchInner]
+    )
 
     // This is because we don't have a good way to trigger server components to reload outside of router.refresh()
     // Once server actions isn't alpha, we can hopefully use that instead
@@ -148,7 +157,6 @@ export const AuthProvider = (props: AuthProviderProps) => {
         }
     }, [])
 
-
     // Periodically refresh the token
     useEffect(() => {
         let didCancel = false
@@ -161,7 +169,10 @@ export const AuthProvider = (props: AuthProviderProps) => {
         }
 
         async function onStorageEvent(event: StorageEvent) {
-            if (event.key === USER_INFO_KEY && !doesLocalStorageMatch(event.newValue, authState.userAndAccessToken.user)) {
+            if (
+                event.key === USER_INFO_KEY &&
+                !doesLocalStorageMatch(event.newValue, authState.userAndAccessToken.user)
+            ) {
                 await refreshToken()
             }
         }
@@ -170,32 +181,31 @@ export const AuthProvider = (props: AuthProviderProps) => {
         const interval = setInterval(refreshToken, 5 * 60 * 1000)
 
         if (hasWindow()) {
-            window.addEventListener("storage", onStorageEvent)
-            window.addEventListener("online", refreshToken)
-            window.addEventListener("focus", refreshToken)
+            window.addEventListener('storage', onStorageEvent)
+            window.addEventListener('online', refreshToken)
+            window.addEventListener('focus', refreshToken)
         }
 
         return () => {
             didCancel = true
             clearInterval(interval)
             if (hasWindow()) {
-                window.removeEventListener("storage", onStorageEvent)
-                window.removeEventListener("online", refreshToken)
-                window.removeEventListener("focus", refreshToken)
+                window.removeEventListener('storage', onStorageEvent)
+                window.removeEventListener('online', refreshToken)
+                window.removeEventListener('focus', refreshToken)
             }
         }
     }, [dispatch, authState.userAndAccessToken.user])
 
-
     const logout = useCallback(async () => {
-        await fetch("/api/auth/logout", {
-            method: "POST",
+        await fetch('/api/auth/logout', {
+            method: 'POST',
             headers: {
-                "Content-Type": "application/json",
+                'Content-Type': 'application/json',
             },
-            credentials: "include",
+            credentials: 'include',
         })
-        dispatch({user: undefined, accessToken: undefined})
+        dispatch({ user: undefined, accessToken: undefined })
     }, [dispatch])
 
     const getLoginPageUrl = (opts?: RedirectToLoginOptions) => {
@@ -203,14 +213,14 @@ export const AuthProvider = (props: AuthProviderProps) => {
             return `/api/auth/login?return_to_path=${encodeURIComponent(opts.postLoginRedirectPath)}`
         }
 
-        return "/api/auth/login"
+        return '/api/auth/login'
     }
     const getSignupPageUrl = (opts?: RedirectToSignupOptions) => {
         if (opts?.postSignupRedirectPath) {
             return `/api/auth/signup?return_to_path=${encodeURIComponent(opts.postSignupRedirectPath)}`
         }
 
-        return "/api/auth/signup"
+        return '/api/auth/signup'
     }
     const getAccountPageUrl = useCallback(() => {
         return `${props.authUrl}/account`
@@ -274,26 +284,28 @@ export const AuthProvider = (props: AuthProviderProps) => {
     return <AuthContext.Provider value={value}>{props.children}</AuthContext.Provider>
 }
 
-type UserInfoResponse = {
-    user: User
-    accessToken: string
-} | {
-    user: undefined
-    accessToken: undefined
-}
+type UserInfoResponse =
+    | {
+          user: User
+          accessToken: string
+      }
+    | {
+          user: undefined
+          accessToken: undefined
+      }
 
 async function apiGetUserInfo(): Promise<UserInfoResponse> {
     try {
-        const userInfoResponse = await fetch("/api/auth/userinfo", {
-            method: "GET",
+        const userInfoResponse = await fetch('/api/auth/userinfo', {
+            method: 'GET',
             headers: {
-                "Content-Type": "application/json",
+                'Content-Type': 'application/json',
             },
-            credentials: "include",
+            credentials: 'include',
         })
 
         if (userInfoResponse.ok) {
-            const {userinfo, accessToken, impersonatorUserId} = await userInfoResponse.json()
+            const { userinfo, accessToken, impersonatorUserId } = await userInfoResponse.json()
             const user = new User({
                 userId: userinfo.user_id,
                 email: userinfo.email,
@@ -313,14 +325,14 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
                 impersonatorUserId,
             })
 
-            return {user, accessToken}
+            return { user, accessToken }
         } else if (userInfoResponse.status === 401) {
-            return {user: undefined, accessToken: undefined}
+            return { user: undefined, accessToken: undefined }
         } else {
-            console.info("Failed to refresh token", userInfoResponse)
+            console.info('Failed to refresh token', userInfoResponse)
         }
     } catch (e) {
-        console.info("Failed to refresh token", e)
+        console.info('Failed to refresh token', e)
     }
-    throw new Error("Failed to refresh token")
+    throw new Error('Failed to refresh token')
 }
