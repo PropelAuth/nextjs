@@ -1,5 +1,7 @@
 export class UserFromToken {
     public userId: string
+
+    public activeOrgId?: string
     public orgIdToOrgMemberInfo?: OrgIdToOrgMemberInfo
 
     // Metadata about the user
@@ -24,8 +26,11 @@ export class UserFromToken {
         legacyUserId?: string,
         impersonatorUserId?: string,
         properties?: { [key: string]: unknown },
+        activeOrgId?: string
     ) {
         this.userId = userId
+
+        this.activeOrgId = activeOrgId
         this.orgIdToOrgMemberInfo = orgIdToOrgMemberInfo
 
         this.email = email
@@ -37,6 +42,18 @@ export class UserFromToken {
         this.impersonatorUserId = impersonatorUserId
 
         this.properties = properties
+    }
+
+    public getActiveOrg(): OrgMemberInfo | undefined {
+        if (!this.activeOrgId || !this.orgIdToOrgMemberInfo) {
+            return undefined
+        }
+
+        return this.orgIdToOrgMemberInfo[this.activeOrgId]
+    }
+
+    public getActiveOrgId(): string | undefined {
+        return this.activeOrgId
     }
 
     public getOrg(orgId: string): OrgMemberInfo | undefined {
@@ -52,7 +69,7 @@ export class UserFromToken {
             return undefined
         }
 
-        const urlSafeOrgName = orgName.toLowerCase().replace(/ /g, "-")
+        const urlSafeOrgName = orgName.toLowerCase().replace(/ /g, '-')
         for (const orgId in this.orgIdToOrgMemberInfo) {
             const orgMemberInfo = this.orgIdToOrgMemberInfo[orgId]
             if (orgMemberInfo.urlSafeOrgName === urlSafeOrgName) {
@@ -79,9 +96,7 @@ export class UserFromToken {
         const obj = JSON.parse(json)
         const orgIdToOrgMemberInfo: OrgIdToOrgMemberInfo = {}
         for (const orgId in obj.orgIdToOrgMemberInfo) {
-            orgIdToOrgMemberInfo[orgId] = OrgMemberInfo.fromJSON(
-                JSON.stringify(obj.orgIdToOrgMemberInfo[orgId])
-            )
+            orgIdToOrgMemberInfo[orgId] = OrgMemberInfo.fromJSON(JSON.stringify(obj.orgIdToOrgMemberInfo[orgId]))
         }
         return new UserFromToken(
             obj.userId,
@@ -92,7 +107,33 @@ export class UserFromToken {
             obj.username,
             obj.legacyUserId,
             obj.impersonatorUserId,
-            obj.properties,
+            obj.properties
+        )
+    }
+
+    public static fromJwtPayload(payload: InternalUser): UserFromToken {
+        let activeOrgId: string | undefined
+        let orgIdToOrgMemberInfo: OrgIdToOrgMemberInfo | undefined
+
+        if (payload.org_member_info) {
+            activeOrgId = payload.org_member_info.org_id
+            orgIdToOrgMemberInfo = toOrgIdToOrgMemberInfo({ [activeOrgId]: payload.org_member_info })
+        } else {
+            activeOrgId = undefined
+            orgIdToOrgMemberInfo = toOrgIdToOrgMemberInfo(payload.org_id_to_org_member_info)
+        }
+
+        return new UserFromToken(
+            payload.user_id,
+            payload.email,
+            orgIdToOrgMemberInfo,
+            payload.first_name,
+            payload.last_name,
+            payload.username,
+            payload.legacy_user_id,
+            payload.impersonatorUserId,
+            payload.properties,
+            activeOrgId
         )
     }
 }
@@ -189,6 +230,8 @@ export type InternalOrgMemberInfo = {
 }
 export type InternalUser = {
     user_id: string
+
+    org_member_info?: InternalOrgMemberInfo
     org_id_to_org_member_info?: { [org_id: string]: InternalOrgMemberInfo }
 
     email: string
@@ -203,17 +246,7 @@ export type InternalUser = {
 }
 
 export function toUser(snake_case: InternalUser): UserFromToken {
-    return new UserFromToken(
-        snake_case.user_id,
-        snake_case.email,
-        toOrgIdToOrgMemberInfo(snake_case.org_id_to_org_member_info),
-        snake_case.first_name,
-        snake_case.last_name,
-        snake_case.username,
-        snake_case.legacy_user_id,
-        snake_case.impersonatorUserId,
-        snake_case.properties,
-    )
+    return UserFromToken.fromJwtPayload(snake_case)
 }
 
 export function toOrgIdToOrgMemberInfo(snake_case?: {

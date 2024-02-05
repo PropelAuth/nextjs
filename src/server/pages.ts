@@ -1,14 +1,17 @@
-import {GetServerSidePropsContext, NextApiRequest, NextApiResponse} from "next";
+import { GetServerSidePropsContext, NextApiRequest, NextApiResponse } from 'next'
 import {
     ACCESS_TOKEN_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
-    refreshTokenWithAccessAndRefreshToken, validateAccessToken,
-    validateAccessTokenOrUndefined
-} from "./shared";
+    refreshTokenWithAccessAndRefreshToken,
+    validateAccessToken,
+    validateAccessTokenOrUndefined,
+} from './shared'
+import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
 
 export async function getUserFromServerSideProps(props: GetServerSidePropsContext, forceRefresh: boolean = false) {
     const accessToken = props.req.cookies[ACCESS_TOKEN_COOKIE_NAME]
     const refreshToken = props.req.cookies[REFRESH_TOKEN_COOKIE_NAME]
+    const activeOrgId = props.req.cookies[ACTIVE_ORG_ID_COOKIE_NAME]
 
     // If we are authenticated, we can continue
     if (accessToken && !forceRefresh) {
@@ -20,18 +23,18 @@ export async function getUserFromServerSideProps(props: GetServerSidePropsContex
 
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
-        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken)
-        if (response.error === "unexpected") {
-            throw new Error("Unexpected error while refreshing access token")
-        } else if (response.error === "unauthorized") {
-            props.res.setHeader("Set-Cookie", [
+        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
+        if (response.error === 'unexpected') {
+            throw new Error('Unexpected error while refreshing access token')
+        } else if (response.error === 'unauthorized') {
+            props.res.setHeader('Set-Cookie', [
                 `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
                 `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
             ])
             return undefined
         } else {
             const user = await validateAccessToken(response.accessToken)
-            props.res.setHeader("Set-Cookie", [
+            props.res.setHeader('Set-Cookie', [
                 `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`,
                 `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`,
             ])
@@ -45,6 +48,7 @@ export async function getUserFromServerSideProps(props: GetServerSidePropsContex
 export async function getUserFromApiRouteRequest(req: NextApiRequest, res: NextApiResponse) {
     const accessToken = req.cookies[ACCESS_TOKEN_COOKIE_NAME]
     const refreshToken = req.cookies[REFRESH_TOKEN_COOKIE_NAME]
+    const activeOrgId = req.cookies[ACTIVE_ORG_ID_COOKIE_NAME]
 
     // If we are authenticated, we can continue
     if (accessToken) {
@@ -56,18 +60,18 @@ export async function getUserFromApiRouteRequest(req: NextApiRequest, res: NextA
 
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
-        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken)
-        if (response.error === "unexpected") {
-            throw new Error("Unexpected error while refreshing access token")
-        } else if (response.error === "unauthorized") {
-            res.setHeader("Set-Cookie", [
+        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
+        if (response.error === 'unexpected') {
+            throw new Error('Unexpected error while refreshing access token')
+        } else if (response.error === 'unauthorized') {
+            res.setHeader('Set-Cookie', [
                 `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
                 `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
             ])
             return undefined
         } else {
             const user = await validateAccessToken(response.accessToken)
-            res.setHeader("Set-Cookie", [
+            res.setHeader('Set-Cookie', [
                 `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`,
                 `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`,
             ])
@@ -76,5 +80,4 @@ export async function getUserFromApiRouteRequest(req: NextApiRequest, res: NextA
     }
 
     return undefined
-
 }
