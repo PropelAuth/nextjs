@@ -197,43 +197,55 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 return new Response('Unexpected error', { status: 500 })
             }
 
-            // If there's a default active org function, we'll use that and we need to re-issue a new access token for the active org
-            if (args?.getDefaultActiveOrgId) {
-                const user = await validateAccessToken(accessToken)
-                const activeOrgId = args.getDefaultActiveOrgId(user)
-                if (activeOrgId) {
-                    const response = await refreshTokenWithAccessAndRefreshToken(data.refresh_token, activeOrgId)
-                    if (response.error === 'unexpected') {
-                        throw new Error('Unexpected error while setting active org')
-                    } else if (response.error === 'unauthorized') {
-                        console.error(
-                            'Unauthorized error while setting active org. Your user may not have access to this org'
-                        )
-                        return new Response('Unauthorized', { status: 401 })
-                    } else {
-                        const headers = new Headers()
-                        headers.append('Location', returnToPath)
-                        headers.append(
-                            'Set-Cookie',
-                            `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
-                        )
-                        headers.append(
-                            'Set-Cookie',
-                            `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
-                        )
-                        headers.append(
-                            'Set-Cookie',
-                            `${ACTIVE_ORG_ID_COOKIE_NAME}=${activeOrgId}; Path=/; HttpOnly; Secure; SameSite=Lax`
-                        )
-                        headers.append(
-                            'Set-Cookie',
-                            `${RETURN_TO_PATH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
-                        )
-                        return new Response(null, {
-                            status: 302,
-                            headers,
-                        })
-                    }
+            // For Active Org, if there is one set, we need to issue a new access token
+            // We start by checking if there's an existing cookie AND the user is in that org
+            // Otherwise, we'll use the default active org function to get the active org
+            // If none of that, we'll just use the access token as is
+            const currentActiveOrgId = req.cookies.get(ACTIVE_ORG_ID_COOKIE_NAME)?.value
+
+            const user = await validateAccessToken(accessToken)
+            const isUserInCurrentActiveOrg = !!currentActiveOrgId && !!user.getOrg(currentActiveOrgId)
+
+            let activeOrgId = undefined
+            if (isUserInCurrentActiveOrg) {
+                activeOrgId = currentActiveOrgId
+            } else if (args?.getDefaultActiveOrgId) {
+                activeOrgId = args.getDefaultActiveOrgId(user)
+            }
+
+            // If there's an active org, we need to re-issue a new access token for the active org
+            if (activeOrgId) {
+                const response = await refreshTokenWithAccessAndRefreshToken(data.refresh_token, activeOrgId)
+                if (response.error === 'unexpected') {
+                    throw new Error('Unexpected error while setting active org')
+                } else if (response.error === 'unauthorized') {
+                    console.error(
+                        'Unauthorized error while setting active org. Your user may not have access to this org'
+                    )
+                    return new Response('Unauthorized', { status: 401 })
+                } else {
+                    const headers = new Headers()
+                    headers.append('Location', returnToPath)
+                    headers.append(
+                        'Set-Cookie',
+                        `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                    )
+                    headers.append(
+                        'Set-Cookie',
+                        `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                    )
+                    headers.append(
+                        'Set-Cookie',
+                        `${ACTIVE_ORG_ID_COOKIE_NAME}=${activeOrgId}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                    )
+                    headers.append(
+                        'Set-Cookie',
+                        `${RETURN_TO_PATH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                    )
+                    return new Response(null, {
+                        status: 302,
+                        headers,
+                    })
                 }
             }
 

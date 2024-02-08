@@ -146,7 +146,7 @@ export type UseUserLoggedIn = {
     isLoggedIn: true
     user: User
     accessToken: string
-    setActiveOrg: (orgId: string) => void
+    setActiveOrg: (orgId: string) => Promise<User | undefined>
 }
 
 export type UseUserNotLoggedIn = {

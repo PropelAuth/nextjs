@@ -84,8 +84,8 @@ export async function refreshTokenWithAccessAndRefreshToken(
     }
 
     const queryParams = new URLSearchParams()
-    queryParams.set('with_active_org_support', 'true')
     if (activeOrgId) {
+        queryParams.set('with_active_org_support', 'true')
         queryParams.set('active_org_id', activeOrgId)
     }
 

@@ -363,7 +363,7 @@ type SetActiveOrgResponse =
 
 async function apiPostSetActiveOrg(orgId: string): Promise<SetActiveOrgResponse> {
     try {
-        const queryParams = new URLSearchParams({ orgId }).toString()
+        const queryParams = new URLSearchParams({ active_org_id: orgId }).toString()
         const url = `/api/auth/set-active-org?${queryParams}`
         const userInfoResponse = await fetch(url, {
             method: 'POST',
