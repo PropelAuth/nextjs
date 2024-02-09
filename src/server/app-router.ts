@@ -108,7 +108,7 @@ export async function authMiddleware(req: NextRequest): Promise<Response> {
 
 export type RouteHandlerArgs = {
     postLoginRedirectPathFn?: (req: NextRequest) => string
-    getDefaultActiveOrgId?: (user: UserFromToken) => string | undefined
+    getDefaultActiveOrgId?: (req: NextRequest, user: UserFromToken) => string | undefined
 }
 
 export function getRouteHandlers(args?: RouteHandlerArgs) {
@@ -210,7 +210,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             if (isUserInCurrentActiveOrg) {
                 activeOrgId = currentActiveOrgId
             } else if (args?.getDefaultActiveOrgId) {
-                activeOrgId = args.getDefaultActiveOrgId(user)
+                activeOrgId = args.getDefaultActiveOrgId(req, user)
             }
 
             // If there's an active org, we need to re-issue a new access token for the active org
