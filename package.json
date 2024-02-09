@@ -1,6 +1,6 @@
 {
     "name": "@propelauth/nextjs",
-    "version": "0.0.111",
+    "version": "0.0.112-beta.1",
     "exports": {
         "./server": {
             "browser": "./dist/server/index.mjs",
