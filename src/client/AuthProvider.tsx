@@ -32,6 +32,7 @@ interface InternalAuthState {
     getOrgPageUrl(orgId?: string): string
     getCreateOrgPageUrl(): string
     getSetupSAMLPageUrl(orgId: string): string
+    getOrgApiKeysPageUrl(orgId?: string): string
 
     refreshAuthInfo: () => Promise<User | undefined>
 }
@@ -258,6 +259,16 @@ export const AuthProvider = (props: AuthProviderProps) => {
         },
         [props.authUrl]
     )
+    const getOrgApiKeysPageUrl = useCallback(
+        (orgId?: string) => {
+            if (orgId) {
+                return `${props.authUrl}/org/api_keys/${orgId}`
+            } else {
+                return `${props.authUrl}/org/api_keys`
+            }
+        },
+        [props.authUrl]
+    )
 
     const redirectTo = (url: string) => {
         window.location.href = url
@@ -269,6 +280,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
     const redirectToOrgPage = (orgId?: string) => redirectTo(getOrgPageUrl(orgId))
     const redirectToCreateOrgPage = () => redirectTo(getCreateOrgPageUrl())
     const redirectToSetupSAMLPage = (orgId: string) => redirectTo(getSetupSAMLPageUrl(orgId))
+    const redirectToOrgApiKeysPage = (orgId?: string) => redirectTo(getApiKeysPageUrl(orgId))
 
     const refreshAuthInfo = async () => {
         const action = await apiGetUserInfo()
@@ -290,6 +302,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
         redirectToOrgPage,
         redirectToCreateOrgPage,
         redirectToSetupSAMLPage,
+        redirectToOrgApiKeysPage,
         getLoginPageUrl,
         getSignupPageUrl,
         getAccountPageUrl,
