@@ -7,6 +7,7 @@ export class UserFromToken {
     public firstName?: string
     public lastName?: string
     public username?: string
+    public pictureUrl?: string
     public properties?: { [key: string]: unknown }
 
     // If you used our migration APIs to migrate this user from a different system,
@@ -24,6 +25,7 @@ export class UserFromToken {
         legacyUserId?: string,
         impersonatorUserId?: string,
         properties?: { [key: string]: unknown },
+        pictureUrl?: string
     ) {
         this.userId = userId
         this.orgIdToOrgMemberInfo = orgIdToOrgMemberInfo
@@ -37,6 +39,7 @@ export class UserFromToken {
         this.impersonatorUserId = impersonatorUserId
 
         this.properties = properties
+        this.pictureUrl = pictureUrl
     }
 
     public getOrg(orgId: string): OrgMemberInfo | undefined {
@@ -93,6 +96,7 @@ export class UserFromToken {
             obj.legacyUserId,
             obj.impersonatorUserId,
             obj.properties,
+            obj.pictureUrl
         )
     }
 }
@@ -195,6 +199,7 @@ export type InternalUser = {
     first_name?: string
     last_name?: string
     username?: string
+    picture_url?: string
     properties?: { [key: string]: unknown }
 
     // If you used our migration APIs to migrate this user from a different system, this is their original ID from that system.
@@ -213,6 +218,7 @@ export function toUser(snake_case: InternalUser): UserFromToken {
         snake_case.legacy_user_id,
         snake_case.impersonatorUserId,
         snake_case.properties,
+        snake_case.picture_url
     )
 }
 
