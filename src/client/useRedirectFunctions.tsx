@@ -1,10 +1,10 @@
-import React, { useContext, useEffect } from "react"
-import { AuthContext } from "./AuthProvider"
+import React, { useContext, useEffect } from 'react'
+import { AuthContext } from './AuthProvider'
 
 export function useRedirectFunctions() {
     const context = useContext(AuthContext)
     if (context === undefined) {
-        throw new Error("useRedirectFunctions must be used within an AuthProvider")
+        throw new Error('useRedirectFunctions must be used within an AuthProvider')
     }
     const {
         redirectToAccountPage,
@@ -12,6 +12,7 @@ export function useRedirectFunctions() {
         redirectToLoginPage,
         redirectToOrgPage,
         redirectToCreateOrgPage,
+        redirectToSetupSAMLPage,
     } = context
     return {
         redirectToSignupPage,
@@ -19,6 +20,7 @@ export function useRedirectFunctions() {
         redirectToAccountPage,
         redirectToOrgPage,
         redirectToCreateOrgPage,
+        redirectToSetupSAMLPage,
     }
 }
 

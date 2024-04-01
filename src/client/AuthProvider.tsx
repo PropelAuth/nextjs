@@ -7,10 +7,15 @@ import { User } from './useUser'
 import { toOrgIdToOrgMemberInfo } from '../user'
 
 export interface RedirectToSignupOptions {
-    postSignupRedirectPath: string
+    postSignupRedirectPath?: string
+    userSignupQueryParameters?: Record<string, string>
 }
 export interface RedirectToLoginOptions {
-    postLoginRedirectPath: string
+    postLoginRedirectPath?: string
+    userSignupQueryParameters?: Record<string, string>
+}
+export interface RedirectOptions {
+    redirectBackToUrl?: string
 }
 
 interface InternalAuthState {
@@ -21,17 +26,17 @@ interface InternalAuthState {
 
     redirectToLoginPage: (opts?: RedirectToLoginOptions) => void
     redirectToSignupPage: (opts?: RedirectToSignupOptions) => void
-    redirectToAccountPage: () => void
-    redirectToOrgPage: (orgId?: string) => void
-    redirectToCreateOrgPage: () => void
-    redirectToSetupSAMLPage: (orgId: string) => void
+    redirectToAccountPage: (opts?: RedirectOptions) => void
+    redirectToOrgPage: (orgId?: string, opts?: RedirectOptions) => void
+    redirectToCreateOrgPage: (opts?: RedirectOptions) => void
+    redirectToSetupSAMLPage: (orgId: string, opts?: RedirectOptions) => void
 
     getSignupPageUrl(opts?: RedirectToSignupOptions): string
     getLoginPageUrl(opts?: RedirectToLoginOptions): string
-    getAccountPageUrl(): string
-    getOrgPageUrl(orgId?: string): string
-    getCreateOrgPageUrl(): string
-    getSetupSAMLPageUrl(orgId: string): string
+    getAccountPageUrl(opts?: RedirectOptions): string
+    getOrgPageUrl(orgId?: string, opts?: RedirectOptions): string
+    getCreateOrgPageUrl(opts?: RedirectOptions): string
+    getSetupSAMLPageUrl(orgId: string, opts?: RedirectOptions): string
 
     refreshAuthInfo: () => Promise<User | undefined>
 }
@@ -235,26 +240,32 @@ export const AuthProvider = (props: AuthProviderProps) => {
 
         return '/api/auth/signup'
     }
-    const getAccountPageUrl = useCallback(() => {
-        return `${props.authUrl}/account`
-    }, [props.authUrl])
+    const getAccountPageUrl = useCallback(
+        (opts?: RedirectOptions) => {
+            return addReturnToPath(`${props.authUrl}/account`, opts?.redirectBackToUrl)
+        },
+        [props.authUrl]
+    )
     const getOrgPageUrl = useCallback(
-        (orgId?: string) => {
+        (orgId?: string, opts?: RedirectOptions) => {
             if (orgId) {
-                return `${props.authUrl}/org?id=${orgId}`
+                return addReturnToPath(`${props.authUrl}/org?id=${orgId}`, opts?.redirectBackToUrl)
             } else {
-                return `${props.authUrl}/org`
+                return addReturnToPath(`${props.authUrl}/org`, opts?.redirectBackToUrl)
             }
         },
         [props.authUrl]
     )
-    const getCreateOrgPageUrl = useCallback(() => {
-        return `${props.authUrl}/create_org`
-    }, [props.authUrl])
+    const getCreateOrgPageUrl = useCallback(
+        (opts?: RedirectOptions) => {
+            return addReturnToPath(`${props.authUrl}/create_org`, opts?.redirectBackToUrl)
+        },
+        [props.authUrl]
+    )
 
     const getSetupSAMLPageUrl = useCallback(
-        (orgId: string) => {
-            return `${props.authUrl}/saml?id=${orgId}`
+        (orgId: string, opts?: RedirectOptions) => {
+            return addReturnToPath(`${props.authUrl}/saml?id=${orgId}`, opts?.redirectBackToUrl)
         },
         [props.authUrl]
     )
@@ -265,10 +276,11 @@ export const AuthProvider = (props: AuthProviderProps) => {
 
     const redirectToLoginPage = (opts?: RedirectToLoginOptions) => redirectTo(getLoginPageUrl(opts))
     const redirectToSignupPage = (opts?: RedirectToSignupOptions) => redirectTo(getSignupPageUrl(opts))
-    const redirectToAccountPage = () => redirectTo(getAccountPageUrl())
-    const redirectToOrgPage = (orgId?: string) => redirectTo(getOrgPageUrl(orgId))
-    const redirectToCreateOrgPage = () => redirectTo(getCreateOrgPageUrl())
-    const redirectToSetupSAMLPage = (orgId: string) => redirectTo(getSetupSAMLPageUrl(orgId))
+    const redirectToAccountPage = (opts?: RedirectOptions) => redirectTo(getAccountPageUrl(opts))
+    const redirectToOrgPage = (orgId?: string, opts?: RedirectOptions) => redirectTo(getOrgPageUrl(orgId, opts))
+    const redirectToCreateOrgPage = (opts?: RedirectOptions) => redirectTo(getCreateOrgPageUrl(opts))
+    const redirectToSetupSAMLPage = (orgId: string, opts?: RedirectOptions) =>
+        redirectTo(getSetupSAMLPageUrl(orgId, opts))
 
     const refreshAuthInfo = async () => {
         const action = await apiGetUserInfo()
@@ -357,5 +369,24 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
     } catch (e) {
         console.info('Failed to refresh token', e)
         return { error: 'unexpected' }
+    }
+}
+
+const encodeBase64 = (str: string) => {
+    const encode = window ? window.btoa : btoa
+    return encode(str)
+}
+
+const addReturnToPath = (url: string, returnToPath?: string) => {
+    if (!returnToPath) {
+        return url
+    }
+
+    let qs = new URLSearchParams()
+    qs.set('rt', encodeBase64(returnToPath))
+    if (url.includes('?')) {
+        return `${url}&${qs.toString()}`
+    } else {
+        return `${url}?${qs.toString()}`
     }
 }
