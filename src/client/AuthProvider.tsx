@@ -146,7 +146,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
 
         async function refreshAuthInfo() {
             const action = await apiGetUserInfo()
-            if (!didCancel) {
+            if (!didCancel && !action.error) {
                 dispatch(action)
             }
         }
@@ -160,11 +160,24 @@ export const AuthProvider = (props: AuthProviderProps) => {
     // Periodically refresh the token
     useEffect(() => {
         let didCancel = false
+        let retryTimer: NodeJS.Timeout | undefined = undefined
+
+        function clearAndSetRetryTimer() {
+            if (retryTimer) {
+                clearTimeout(retryTimer)
+            }
+            retryTimer = setTimeout(refreshToken, 30 * 1000)
+        }
 
         async function refreshToken() {
             const action = await apiGetUserInfo()
-            if (!didCancel) {
+            if (didCancel) {
+                return
+            }
+            if (!action.error) {
                 dispatch(action)
+            } else if (action.error === 'unexpected') {
+                clearAndSetRetryTimer()
             }
         }
 
@@ -177,7 +190,6 @@ export const AuthProvider = (props: AuthProviderProps) => {
             }
         }
 
-        // TODO: Retry logic if the request fails
         const interval = setInterval(refreshToken, 5 * 60 * 1000)
 
         if (hasWindow()) {
@@ -189,6 +201,9 @@ export const AuthProvider = (props: AuthProviderProps) => {
         return () => {
             didCancel = true
             clearInterval(interval)
+            if (retryTimer) {
+                clearTimeout(retryTimer)
+            }
             if (hasWindow()) {
                 window.removeEventListener('storage', onStorageEvent)
                 window.removeEventListener('online', refreshToken)
@@ -259,8 +274,12 @@ export const AuthProvider = (props: AuthProviderProps) => {
 
     const refreshAuthInfo = async () => {
         const action = await apiGetUserInfo()
-        dispatch(action)
-        return action.user
+        if (action.error) {
+            throw new Error('Failed to refresh token')
+        } else {
+            dispatch(action)
+            return action.user
+        }
     }
 
     const value = {
@@ -286,12 +305,17 @@ export const AuthProvider = (props: AuthProviderProps) => {
 
 type UserInfoResponse =
     | {
+          error: undefined
           user: User
           accessToken: string
       }
     | {
+          error: undefined
           user: undefined
           accessToken: undefined
+      }
+    | {
+          error: 'unexpected'
       }
 
 async function apiGetUserInfo(): Promise<UserInfoResponse> {
@@ -325,14 +349,15 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
                 impersonatorUserId,
             })
 
-            return { user, accessToken }
+            return { user, accessToken, error: undefined }
         } else if (userInfoResponse.status === 401) {
-            return { user: undefined, accessToken: undefined }
+            return { user: undefined, accessToken: undefined, error: undefined }
         } else {
             console.info('Failed to refresh token', userInfoResponse)
+            return { error: 'unexpected' }
         }
     } catch (e) {
         console.info('Failed to refresh token', e)
+        return { error: 'unexpected' }
     }
-    throw new Error('Failed to refresh token')
 }
