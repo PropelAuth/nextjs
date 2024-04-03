@@ -1,3 +1,5 @@
+import { InternalLoginMethod, LoginMethod, toLoginMethod } from './loginMethod'
+
 export class UserFromToken {
     public userId: string
     public orgIdToOrgMemberInfo?: OrgIdToOrgMemberInfo
@@ -8,6 +10,7 @@ export class UserFromToken {
     public lastName?: string
     public username?: string
     public properties?: { [key: string]: unknown }
+    public loginMethod?: LoginMethod
 
     // If you used our migration APIs to migrate this user from a different system,
     //   this is their original ID from that system.
@@ -24,6 +27,7 @@ export class UserFromToken {
         legacyUserId?: string,
         impersonatorUserId?: string,
         properties?: { [key: string]: unknown },
+        loginMethod?: LoginMethod
     ) {
         this.userId = userId
         this.orgIdToOrgMemberInfo = orgIdToOrgMemberInfo
@@ -37,6 +41,7 @@ export class UserFromToken {
         this.impersonatorUserId = impersonatorUserId
 
         this.properties = properties
+        this.loginMethod = loginMethod
     }
 
     public getOrg(orgId: string): OrgMemberInfo | undefined {
@@ -52,7 +57,7 @@ export class UserFromToken {
             return undefined
         }
 
-        const urlSafeOrgName = orgName.toLowerCase().replace(/ /g, "-")
+        const urlSafeOrgName = orgName.toLowerCase().replace(/ /g, '-')
         for (const orgId in this.orgIdToOrgMemberInfo) {
             const orgMemberInfo = this.orgIdToOrgMemberInfo[orgId]
             if (orgMemberInfo.urlSafeOrgName === urlSafeOrgName) {
@@ -79,9 +84,7 @@ export class UserFromToken {
         const obj = JSON.parse(json)
         const orgIdToOrgMemberInfo: OrgIdToOrgMemberInfo = {}
         for (const orgId in obj.orgIdToOrgMemberInfo) {
-            orgIdToOrgMemberInfo[orgId] = OrgMemberInfo.fromJSON(
-                JSON.stringify(obj.orgIdToOrgMemberInfo[orgId])
-            )
+            orgIdToOrgMemberInfo[orgId] = OrgMemberInfo.fromJSON(JSON.stringify(obj.orgIdToOrgMemberInfo[orgId]))
         }
         return new UserFromToken(
             obj.userId,
@@ -93,6 +96,7 @@ export class UserFromToken {
             obj.legacyUserId,
             obj.impersonatorUserId,
             obj.properties,
+            obj.loginMethod
         )
     }
 }
@@ -187,6 +191,7 @@ export type InternalOrgMemberInfo = {
     inherited_user_roles_plus_current_role: string[]
     user_permissions: string[]
 }
+
 export type InternalUser = {
     user_id: string
     org_id_to_org_member_info?: { [org_id: string]: InternalOrgMemberInfo }
@@ -196,6 +201,7 @@ export type InternalUser = {
     last_name?: string
     username?: string
     properties?: { [key: string]: unknown }
+    login_method?: InternalLoginMethod
 
     // If you used our migration APIs to migrate this user from a different system, this is their original ID from that system.
     legacy_user_id?: string
@@ -213,6 +219,7 @@ export function toUser(snake_case: InternalUser): UserFromToken {
         snake_case.legacy_user_id,
         snake_case.impersonatorUserId,
         snake_case.properties,
+        toLoginMethod(snake_case.login_method)
     )
 }
 
