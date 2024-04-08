@@ -101,15 +101,22 @@ export type OrgIdToOrgMemberInfo = {
     [orgId: string]: OrgMemberInfo
 }
 
+export enum OrgRoleStructure {
+    SingleRole = "single_role_in_hierarchy",
+    MultiRole = "multi_role",
+}
+
 export class OrgMemberInfo {
     public orgId: string
     public orgName: string
     public orgMetadata: { [key: string]: any }
     public urlSafeOrgName: string
+    public orgRoleStructure: OrgRoleStructure
 
     public userAssignedRole: string
     public userInheritedRolesPlusCurrentRole: string[]
     public userPermissions: string[]
+    public userAssignedAdditionalRoles: string[]
 
     constructor(
         orgId: string,
@@ -118,26 +125,38 @@ export class OrgMemberInfo {
         urlSafeOrgName: string,
         userAssignedRole: string,
         userInheritedRolesPlusCurrentRole: string[],
-        userPermissions: string[]
+        userPermissions: string[],
+        orgRoleStructure: OrgRoleStructure,
+        userAssignedAdditionalRoles: string[]
     ) {
         this.orgId = orgId
         this.orgName = orgName
         this.orgMetadata = orgMetadata
         this.urlSafeOrgName = urlSafeOrgName
+        this.orgRoleStructure = orgRoleStructure
 
         this.userAssignedRole = userAssignedRole
         this.userInheritedRolesPlusCurrentRole = userInheritedRolesPlusCurrentRole
         this.userPermissions = userPermissions
+        this.userAssignedAdditionalRoles = userAssignedAdditionalRoles
     }
 
     // validation methods
 
     public isRole(role: string): boolean {
-        return this.userAssignedRole === role
+        if (this.orgRoleStructure === OrgRoleStructure.MultiRole) {
+            return this.userAssignedRole === role || this.userAssignedAdditionalRoles.includes(role)
+        } else {
+            return this.userAssignedRole === role
+        }
     }
 
     public isAtLeastRole(role: string): boolean {
-        return this.userInheritedRolesPlusCurrentRole.includes(role)
+        if (this.orgRoleStructure === OrgRoleStructure.MultiRole) {
+            return this.userAssignedRole === role || this.userAssignedAdditionalRoles.includes(role)
+        } else {
+            return this.userInheritedRolesPlusCurrentRole.includes(role)
+        }
     }
 
     public hasPermission(permission: string): boolean {
@@ -157,7 +176,9 @@ export class OrgMemberInfo {
             obj.urlSafeOrgName,
             obj.userAssignedRole,
             obj.userInheritedRolesPlusCurrentRole,
-            obj.userPermissions
+            obj.userPermissions,
+            obj.orgRoleStructure,
+            obj.userAssignedAdditionalRoles
         )
     }
 
@@ -167,8 +188,20 @@ export class OrgMemberInfo {
         return this.userAssignedRole
     }
 
+    get assignedRoles(): string[] {
+        if (this.orgRoleStructure === OrgRoleStructure.MultiRole) {
+            return this.userAssignedAdditionalRoles.concat(this.userAssignedRole)
+        } else {
+            return [this.userAssignedRole]
+        }
+    }
+
     get inheritedRolesPlusCurrentRole(): string[] {
-        return this.userInheritedRolesPlusCurrentRole
+        if (this.orgRoleStructure === OrgRoleStructure.MultiRole) {
+            return this.userAssignedAdditionalRoles.concat(this.userAssignedRole)
+        } else {
+            return this.userInheritedRolesPlusCurrentRole
+        }
     }
 
     get permissions(): string[] {
@@ -183,9 +216,11 @@ export type InternalOrgMemberInfo = {
     org_name: string
     org_metadata: { [key: string]: any }
     url_safe_org_name: string
+    org_role_structure: OrgRoleStructure
     user_role: string
     inherited_user_roles_plus_current_role: string[]
     user_permissions: string[]
+    additional_roles: string[]
 }
 export type InternalUser = {
     user_id: string
@@ -234,7 +269,9 @@ export function toOrgIdToOrgMemberInfo(snake_case?: {
                 snakeCaseValue.url_safe_org_name,
                 snakeCaseValue.user_role,
                 snakeCaseValue.inherited_user_roles_plus_current_role,
-                snakeCaseValue.user_permissions
+                snakeCaseValue.user_permissions,
+                snakeCaseValue.org_role_structure,
+                snakeCaseValue.additional_roles
             )
         }
     }
