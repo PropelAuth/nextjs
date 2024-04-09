@@ -39,6 +39,7 @@ interface InternalAuthState {
     getSetupSAMLPageUrl(orgId: string, opts?: RedirectOptions): string
 
     refreshAuthInfo: () => Promise<User | undefined>
+    setActiveOrg: (orgId: string) => Promise<User | undefined>
 }
 
 export type AuthProviderProps = {
@@ -282,7 +283,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
     const redirectToSetupSAMLPage = (orgId: string, opts?: RedirectOptions) =>
         redirectTo(getSetupSAMLPageUrl(orgId, opts))
 
-    const refreshAuthInfo = async () => {
+    const refreshAuthInfo = useCallback(async () => {
         const action = await apiGetUserInfo()
         if (action.error) {
             throw new Error('Failed to refresh token')
@@ -290,7 +291,20 @@ export const AuthProvider = (props: AuthProviderProps) => {
             dispatch(action)
             return action.user
         }
-    }
+    }, [dispatch])
+
+    const setActiveOrg = useCallback(
+        async (orgId: string) => {
+            const action = await apiPostSetActiveOrg(orgId)
+            if (action.error === 'not_in_org') {
+                return undefined
+            } else {
+                dispatch(action)
+                return action.user
+            }
+        },
+        [dispatch]
+    )
 
     const value = {
         loading: authState.loading,
@@ -309,6 +323,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
         getCreateOrgPageUrl,
         getSetupSAMLPageUrl,
         refreshAuthInfo,
+        setActiveOrg,
     }
     return <AuthContext.Provider value={value}>{props.children}</AuthContext.Provider>
 }
@@ -339,7 +354,7 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
         })
 
         if (userInfoResponse.ok) {
-            const { userinfo, accessToken, impersonatorUserId } = await userInfoResponse.json()
+            const { userinfo, accessToken, impersonatorUserId, activeOrgId } = await userInfoResponse.json()
             const user = new User({
                 userId: userinfo.user_id,
                 email: userinfo.email,
@@ -350,6 +365,7 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
                 lastName: userinfo.last_name,
                 pictureUrl: userinfo.picture_url,
                 orgIdToOrgMemberInfo: toOrgIdToOrgMemberInfo(userinfo.org_id_to_org_info),
+                activeOrgId,
                 mfaEnabled: userinfo.mfa_enabled,
                 canCreateOrgs: userinfo.can_create_orgs,
                 updatePasswordRequired: userinfo.update_password_required,
@@ -370,6 +386,62 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
         console.info('Failed to refresh token', e)
         return { error: 'unexpected' }
     }
+}
+
+type SetActiveOrgResponse =
+    | {
+          user: User
+          accessToken: string
+          error: undefined
+      }
+    | {
+          error: 'not_in_org'
+      }
+
+async function apiPostSetActiveOrg(orgId: string): Promise<SetActiveOrgResponse> {
+    try {
+        const queryParams = new URLSearchParams({ active_org_id: orgId }).toString()
+        const url = `/api/auth/set-active-org?${queryParams}`
+        const userInfoResponse = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+        })
+
+        if (userInfoResponse.ok) {
+            const { userinfo, accessToken, impersonatorUserId, activeOrgId } = await userInfoResponse.json()
+            const user = new User({
+                userId: userinfo.user_id,
+                email: userinfo.email,
+                emailConfirmed: userinfo.email_confirmed,
+                hasPassword: userinfo.has_password,
+                username: userinfo.username,
+                firstName: userinfo.first_name,
+                lastName: userinfo.last_name,
+                pictureUrl: userinfo.picture_url,
+                orgIdToOrgMemberInfo: toOrgIdToOrgMemberInfo(userinfo.org_id_to_org_info),
+                activeOrgId,
+                mfaEnabled: userinfo.mfa_enabled,
+                canCreateOrgs: userinfo.can_create_orgs,
+                updatePasswordRequired: userinfo.update_password_required,
+                createdAt: userinfo.created_at,
+                lastActiveAt: userinfo.last_active_at,
+                properties: userinfo.properties,
+                impersonatorUserId,
+            })
+
+            return { user, accessToken, error: undefined }
+        } else if (userInfoResponse.status === 401) {
+            return { error: 'not_in_org' }
+        } else {
+            console.info('Failed to set active org', userInfoResponse)
+        }
+    } catch (e) {
+        console.info('Failed to set active org', e)
+    }
+    throw new Error('Failed to set active org')
 }
 
 const encodeBase64 = (str: string) => {

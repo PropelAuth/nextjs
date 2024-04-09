@@ -6,10 +6,12 @@ import {
     validateAccessToken,
     validateAccessTokenOrUndefined,
 } from './shared'
+import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
 
 export async function getUserFromServerSideProps(props: GetServerSidePropsContext, forceRefresh: boolean = false) {
     const accessToken = props.req.cookies[ACCESS_TOKEN_COOKIE_NAME]
     const refreshToken = props.req.cookies[REFRESH_TOKEN_COOKIE_NAME]
+    const activeOrgId = props.req.cookies[ACTIVE_ORG_ID_COOKIE_NAME]
 
     // If we are authenticated, we can continue
     if (accessToken && !forceRefresh) {
@@ -21,7 +23,7 @@ export async function getUserFromServerSideProps(props: GetServerSidePropsContex
 
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
-        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken)
+        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
         if (response.error === 'unexpected') {
             throw new Error('Unexpected error while refreshing access token')
         } else if (response.error === 'unauthorized') {
@@ -50,6 +52,7 @@ export async function getUserFromApiRouteRequest(
 ) {
     const accessToken = req.cookies[ACCESS_TOKEN_COOKIE_NAME]
     const refreshToken = req.cookies[REFRESH_TOKEN_COOKIE_NAME]
+    const activeOrgId = req.cookies[ACTIVE_ORG_ID_COOKIE_NAME]
 
     // If we are authenticated, we can continue
     if (accessToken && !forceRefresh) {
@@ -61,7 +64,7 @@ export async function getUserFromApiRouteRequest(
 
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
-        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken)
+        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
         if (response.error === 'unexpected') {
             throw new Error('Unexpected error while refreshing access token')
         } else if (response.error === 'unauthorized') {
