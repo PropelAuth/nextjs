@@ -1,3 +1,5 @@
+import { InternalLoginMethod, LoginMethod, toLoginMethod } from './loginMethod'
+
 export class UserFromToken {
     public userId: string
 
@@ -10,6 +12,7 @@ export class UserFromToken {
     public lastName?: string
     public username?: string
     public properties?: { [key: string]: unknown }
+    public loginMethod?: LoginMethod
 
     // If you used our migration APIs to migrate this user from a different system,
     //   this is their original ID from that system.
@@ -26,7 +29,8 @@ export class UserFromToken {
         legacyUserId?: string,
         impersonatorUserId?: string,
         properties?: { [key: string]: unknown },
-        activeOrgId?: string
+        activeOrgId?: string,
+        loginMethod?: LoginMethod
     ) {
         this.userId = userId
 
@@ -42,6 +46,7 @@ export class UserFromToken {
         this.impersonatorUserId = impersonatorUserId
 
         this.properties = properties
+        this.loginMethod = loginMethod
     }
 
     public getActiveOrg(): OrgMemberInfo | undefined {
@@ -107,7 +112,9 @@ export class UserFromToken {
             obj.username,
             obj.legacyUserId,
             obj.impersonatorUserId,
-            obj.properties
+            obj.properties,
+            obj.activeOrgId,
+            obj.loginMethod
         )
     }
 
@@ -123,6 +130,8 @@ export class UserFromToken {
             orgIdToOrgMemberInfo = toOrgIdToOrgMemberInfo(payload.org_id_to_org_member_info)
         }
 
+        const loginMethod = toLoginMethod(payload.login_method)
+
         return new UserFromToken(
             payload.user_id,
             payload.email,
@@ -133,7 +142,8 @@ export class UserFromToken {
             payload.legacy_user_id,
             payload.impersonatorUserId,
             payload.properties,
-            activeOrgId
+            activeOrgId,
+            loginMethod
         )
     }
 }
@@ -228,6 +238,7 @@ export type InternalOrgMemberInfo = {
     inherited_user_roles_plus_current_role: string[]
     user_permissions: string[]
 }
+
 export type InternalUser = {
     user_id: string
 
@@ -239,6 +250,7 @@ export type InternalUser = {
     last_name?: string
     username?: string
     properties?: { [key: string]: unknown }
+    login_method?: InternalLoginMethod
 
     // If you used our migration APIs to migrate this user from a different system, this is their original ID from that system.
     legacy_user_id?: string

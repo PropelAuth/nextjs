@@ -45,13 +45,17 @@ export async function getUserFromServerSideProps(props: GetServerSidePropsContex
     return undefined
 }
 
-export async function getUserFromApiRouteRequest(req: NextApiRequest, res: NextApiResponse) {
+export async function getUserFromApiRouteRequest(
+    req: NextApiRequest,
+    res: NextApiResponse,
+    forceRefresh: boolean = false
+) {
     const accessToken = req.cookies[ACCESS_TOKEN_COOKIE_NAME]
     const refreshToken = req.cookies[REFRESH_TOKEN_COOKIE_NAME]
     const activeOrgId = req.cookies[ACTIVE_ORG_ID_COOKIE_NAME]
 
     // If we are authenticated, we can continue
-    if (accessToken) {
+    if (accessToken && !forceRefresh) {
         const user = await validateAccessTokenOrUndefined(accessToken)
         if (user) {
             return user
