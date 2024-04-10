@@ -6,6 +6,7 @@ import {
     CALLBACK_PATH,
     COOKIE_OPTIONS,
     CUSTOM_HEADER_FOR_ACCESS_TOKEN,
+    CUSTOM_HEADER_FOR_URL,
     getAuthUrlOrigin,
     getIntegrationApiKey,
     getRedirectUri,
@@ -22,12 +23,20 @@ import {
 import { UserFromToken } from './index'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
 
-export async function getUserOrRedirect(): Promise<UserFromToken> {
+export type RedirectOptions = {
+    returnToPath: string
+    returnToCurrentPath?: never
+} | {
+    returnToPath?: never
+    returnToCurrentPath: boolean
+}
+
+export async function getUserOrRedirect(redirectOptions?: RedirectOptions): Promise<UserFromToken> {
     const user = await getUser()
     if (user) {
         return user
     } else {
-        redirect(LOGIN_PATH)
+        redirectToLogin(redirectOptions)
         throw new Error('Redirecting to login')
     }
 }
@@ -57,13 +66,15 @@ export function getAccessToken(): string | undefined {
 export async function authMiddleware(req: NextRequest): Promise<Response> {
     if (req.headers.has(CUSTOM_HEADER_FOR_ACCESS_TOKEN)) {
         throw new Error(`${CUSTOM_HEADER_FOR_ACCESS_TOKEN} is set which is for internal use only`)
+    } else if (req.headers.has(CUSTOM_HEADER_FOR_URL)) {
+        throw new Error(`${CUSTOM_HEADER_FOR_URL} is set which is for internal use only`)
     } else if (
         req.nextUrl.pathname === CALLBACK_PATH ||
         req.nextUrl.pathname === LOGOUT_PATH ||
         req.nextUrl.pathname === USERINFO_PATH
     ) {
         // Don't do anything for the callback, logout, or userinfo paths, as they will modify the cookies themselves
-        return NextResponse.next()
+        return getNextResponse(req)
     }
 
     const accessToken = req.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value
@@ -74,7 +85,7 @@ export async function authMiddleware(req: NextRequest): Promise<Response> {
     if (accessToken) {
         const user = await validateAccessTokenOrUndefined(accessToken)
         if (user) {
-            return NextResponse.next()
+            return getNextResponse(req)
         }
     }
 
@@ -84,26 +95,32 @@ export async function authMiddleware(req: NextRequest): Promise<Response> {
         if (response.error === 'unexpected') {
             throw new Error('Unexpected error while refreshing access token')
         } else if (response.error === 'unauthorized') {
-            const response = NextResponse.next()
+            const response = getNextResponse(req)
             response.cookies.delete(ACCESS_TOKEN_COOKIE_NAME)
             response.cookies.delete(REFRESH_TOKEN_COOKIE_NAME)
             return response
         } else {
-            const headers = new Headers(req.headers)
-            // Pass along the new access token in a header since cookies don't work
-            headers.append(CUSTOM_HEADER_FOR_ACCESS_TOKEN, response.accessToken)
-            const nextResponse = NextResponse.next({
-                request: {
-                    headers,
-                },
-            })
+            const nextResponse = getNextResponse(req, response.accessToken)
             nextResponse.cookies.set(ACCESS_TOKEN_COOKIE_NAME, response.accessToken, COOKIE_OPTIONS)
             nextResponse.cookies.set(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken, COOKIE_OPTIONS)
             return nextResponse
         }
     }
 
-    return NextResponse.next()
+    return getNextResponse(req)
+}
+
+function getNextResponse(request: NextRequest, newAccessToken?: string) {
+    const headers = new Headers(request.headers)
+    headers.set(CUSTOM_HEADER_FOR_URL, request.nextUrl.toString())
+    if (newAccessToken) {
+        headers.set(CUSTOM_HEADER_FOR_ACCESS_TOKEN, newAccessToken)
+    }
+    return NextResponse.next({
+        request: {
+            headers,
+        },
+    })
 }
 
 export type RouteHandlerArgs = {
@@ -595,4 +612,55 @@ function randomState(): string {
     return Array.from(randomBytes)
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('')
+}
+
+function redirectToLogin(redirectOptions?: RedirectOptions) {
+    if (!redirectOptions) {
+        redirect(LOGIN_PATH)
+
+    } else if (redirectOptions.returnToPath) {
+        const loginPath = LOGIN_PATH + '?return_to_path=' + encodeURI(redirectOptions.returnToPath)
+        redirect(loginPath)
+
+    } else if (redirectOptions.returnToCurrentPath) {
+        const encodedPath = getUrlEncodedRedirectPathForCurrentUrl()
+        if (encodedPath) {
+            const loginPath = LOGIN_PATH + '?return_to_path=' + encodedPath
+            redirect(loginPath)
+
+        } else {
+            console.warn('Could not get current URL to redirect to')
+            redirect(LOGIN_PATH)
+        }
+    }
+}
+
+export function getUrlEncodedRedirectPathForCurrentUrl(): string | undefined {
+    const url = getCurrentUrl()
+    if (!url) {
+        return undefined
+    }
+
+    try {
+        const urlObj = new URL(url)
+        return encodeURIComponent(urlObj.pathname + urlObj.search)
+    } catch (e) {
+        console.warn('Current URL is not a valid URL')
+        return undefined
+    }
+}
+
+// It's really common to want to redirect back to the exact location you are on
+// Next.js unfortunately makes this pretty hard, as server components don't have access to the URL
+// The only good way to do this is to set up some middleware and pass the URL down from the middleware
+// Since we have the requirement that people set up middleware with us anyway, it's easy for us to expose
+// this functionality
+export function getCurrentUrl(): string | undefined {
+    const url = headers().get(CUSTOM_HEADER_FOR_URL)
+    if (!url) {
+        console.warn('Attempting to redirect to the current URL, but we could not find the current URL in the headers. Is the middleware set up?')
+        return undefined
+    } else {
+        return url
+    }
 }
