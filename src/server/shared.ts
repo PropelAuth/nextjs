@@ -30,6 +30,7 @@ export const ACCESS_TOKEN_COOKIE_NAME = '__pa_at'
 export const REFRESH_TOKEN_COOKIE_NAME = '__pa_rt'
 export const STATE_COOKIE_NAME = '__pa_state'
 export const CUSTOM_HEADER_FOR_ACCESS_TOKEN = 'x-propelauth-access-token'
+export const CUSTOM_HEADER_FOR_URL = 'x-propelauth-current-url'
 export const RETURN_TO_PATH_COOKIE_NAME = '__pa_return_to_path'
 
 export const COOKIE_OPTIONS: Partial<ResponseCookie> = {
