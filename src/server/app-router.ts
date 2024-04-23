@@ -6,6 +6,7 @@ import {
     CALLBACK_PATH,
     COOKIE_OPTIONS,
     CUSTOM_HEADER_FOR_ACCESS_TOKEN,
+    CUSTOM_HEADER_FOR_URL,
     getAuthUrlOrigin,
     getIntegrationApiKey,
     getRedirectUri,
@@ -20,19 +21,28 @@ import {
     validateAccessTokenOrUndefined,
 } from './shared'
 import { UserFromToken } from './index'
+import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
 
-export async function getUserOrRedirect(): Promise<UserFromToken> {
+export type RedirectOptions = {
+    returnToPath: string
+    returnToCurrentPath?: never
+} | {
+    returnToPath?: never
+    returnToCurrentPath: boolean
+}
+
+export async function getUserOrRedirect(redirectOptions?: RedirectOptions): Promise<UserFromToken> {
     const user = await getUser()
     if (user) {
         return user
     } else {
-        redirect(LOGIN_PATH)
+        redirectToLogin(redirectOptions)
         throw new Error('Redirecting to login')
     }
 }
 
 export async function getUser(): Promise<UserFromToken | undefined> {
-    const accessToken = headers().get(CUSTOM_HEADER_FOR_ACCESS_TOKEN) || cookies().get(ACCESS_TOKEN_COOKIE_NAME)?.value
+    const accessToken = getAccessToken()
     if (accessToken) {
         const user = await validateAccessTokenOrUndefined(accessToken)
         if (user) {
@@ -42,7 +52,7 @@ export async function getUser(): Promise<UserFromToken | undefined> {
     return undefined
 }
 
-export async function getAccessToken(): Promise<string | undefined> {
+export function getAccessToken(): string | undefined {
     return headers().get(CUSTOM_HEADER_FOR_ACCESS_TOKEN) || cookies().get(ACCESS_TOKEN_COOKIE_NAME)?.value
 }
 
@@ -56,56 +66,66 @@ export async function getAccessToken(): Promise<string | undefined> {
 export async function authMiddleware(req: NextRequest): Promise<Response> {
     if (req.headers.has(CUSTOM_HEADER_FOR_ACCESS_TOKEN)) {
         throw new Error(`${CUSTOM_HEADER_FOR_ACCESS_TOKEN} is set which is for internal use only`)
+    } else if (req.headers.has(CUSTOM_HEADER_FOR_URL)) {
+        throw new Error(`${CUSTOM_HEADER_FOR_URL} is set which is for internal use only`)
     } else if (
         req.nextUrl.pathname === CALLBACK_PATH ||
         req.nextUrl.pathname === LOGOUT_PATH ||
         req.nextUrl.pathname === USERINFO_PATH
     ) {
         // Don't do anything for the callback, logout, or userinfo paths, as they will modify the cookies themselves
-        return NextResponse.next()
+        return getNextResponse(req)
     }
 
     const accessToken = req.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value
     const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
+    const activeOrgId = req.cookies.get(ACTIVE_ORG_ID_COOKIE_NAME)?.value
 
     // If we are authenticated, we can continue
     if (accessToken) {
         const user = await validateAccessTokenOrUndefined(accessToken)
         if (user) {
-            return NextResponse.next()
+            return getNextResponse(req)
         }
     }
 
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
-        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken)
+        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
         if (response.error === 'unexpected') {
             throw new Error('Unexpected error while refreshing access token')
         } else if (response.error === 'unauthorized') {
-            const response = NextResponse.next()
+            const response = getNextResponse(req)
             response.cookies.delete(ACCESS_TOKEN_COOKIE_NAME)
             response.cookies.delete(REFRESH_TOKEN_COOKIE_NAME)
             return response
         } else {
-            const headers = new Headers(req.headers)
-            // Pass along the new access token in a header since cookies don't work
-            headers.append(CUSTOM_HEADER_FOR_ACCESS_TOKEN, response.accessToken)
-            const nextResponse = NextResponse.next({
-                request: {
-                    headers,
-                },
-            })
+            const nextResponse = getNextResponse(req, response.accessToken)
             nextResponse.cookies.set(ACCESS_TOKEN_COOKIE_NAME, response.accessToken, COOKIE_OPTIONS)
             nextResponse.cookies.set(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken, COOKIE_OPTIONS)
             return nextResponse
         }
     }
 
-    return NextResponse.next()
+    return getNextResponse(req)
+}
+
+function getNextResponse(request: NextRequest, newAccessToken?: string) {
+    const headers = new Headers(request.headers)
+    headers.set(CUSTOM_HEADER_FOR_URL, request.nextUrl.toString())
+    if (newAccessToken) {
+        headers.set(CUSTOM_HEADER_FOR_ACCESS_TOKEN, newAccessToken)
+    }
+    return NextResponse.next({
+        request: {
+            headers,
+        },
+    })
 }
 
 export type RouteHandlerArgs = {
     postLoginRedirectPathFn?: (req: NextRequest) => string
+    getDefaultActiveOrgId?: (req: NextRequest, user: UserFromToken) => string | undefined
 }
 
 export function getRouteHandlers(args?: RouteHandlerArgs) {
@@ -194,6 +214,58 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 return new Response('Unexpected error', { status: 500 })
             }
 
+            // For Active Org, if there is one set, we need to issue a new access token
+            // We start by checking if there's an existing cookie AND the user is in that org
+            // Otherwise, we'll use the default active org function to get the active org
+            // If none of that, we'll just use the access token as is
+            const currentActiveOrgId = req.cookies.get(ACTIVE_ORG_ID_COOKIE_NAME)?.value
+
+            const user = await validateAccessToken(accessToken)
+            const isUserInCurrentActiveOrg = !!currentActiveOrgId && !!user.getOrg(currentActiveOrgId)
+
+            let activeOrgId = undefined
+            if (isUserInCurrentActiveOrg) {
+                activeOrgId = currentActiveOrgId
+            } else if (args?.getDefaultActiveOrgId) {
+                activeOrgId = args.getDefaultActiveOrgId(req, user)
+            }
+
+            // If there's an active org, we need to re-issue a new access token for the active org
+            if (activeOrgId) {
+                const response = await refreshTokenWithAccessAndRefreshToken(data.refresh_token, activeOrgId)
+                if (response.error === 'unexpected') {
+                    throw new Error('Unexpected error while setting active org')
+                } else if (response.error === 'unauthorized') {
+                    console.error(
+                        'Unauthorized error while setting active org. Your user may not have access to this org'
+                    )
+                    return new Response('Unauthorized', { status: 401 })
+                } else {
+                    const headers = new Headers()
+                    headers.append('Location', returnToPath)
+                    headers.append(
+                        'Set-Cookie',
+                        `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                    )
+                    headers.append(
+                        'Set-Cookie',
+                        `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                    )
+                    headers.append(
+                        'Set-Cookie',
+                        `${ACTIVE_ORG_ID_COOKIE_NAME}=${activeOrgId}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                    )
+                    headers.append(
+                        'Set-Cookie',
+                        `${RETURN_TO_PATH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                    )
+                    return new Response(null, {
+                        status: 302,
+                        headers,
+                    })
+                }
+            }
+
             const headers = new Headers()
             headers.append('Location', returnToPath)
             headers.append(
@@ -203,6 +275,10 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             headers.append(
                 'Set-Cookie',
                 `${REFRESH_TOKEN_COOKIE_NAME}=${data.refresh_token}; Path=/; HttpOnly; Secure; SameSite=Lax`
+            )
+            headers.append(
+                'Set-Cookie',
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
             )
             headers.append(
                 'Set-Cookie',
@@ -224,10 +300,11 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
     async function userinfoGetHandler(req: NextRequest) {
         const oldRefreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
+        const activeOrgId = req.cookies.get(ACTIVE_ORG_ID_COOKIE_NAME)?.value
 
         // For the userinfo endpoint, we want to get the most up-to-date info, so we'll refresh the access token
         if (oldRefreshToken) {
-            const refreshResponse = await refreshTokenWithAccessAndRefreshToken(oldRefreshToken)
+            const refreshResponse = await refreshTokenWithAccessAndRefreshToken(oldRefreshToken, activeOrgId)
             if (refreshResponse.error === 'unexpected') {
                 throw new Error('Unexpected error while refreshing access token')
             } else if (refreshResponse.error === 'unauthorized') {
@@ -239,6 +316,10 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 headers.append(
                     'Set-Cookie',
                     `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                )
+                headers.append(
+                    'Set-Cookie',
+                    `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
                 )
                 return new Response('Unauthorized', { status: 401, headers })
             }
@@ -261,6 +342,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                     userinfo: data,
                     accessToken,
                     impersonatorUserId: userFromToken.impersonatorUserId,
+                    activeOrgId,
                 }
 
                 const headers = new Headers()
@@ -287,6 +369,10 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                     'Set-Cookie',
                     `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
                 )
+                headers.append(
+                    'Set-Cookie',
+                    `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                )
                 return new Response(null, {
                     status: 401,
                     headers,
@@ -299,6 +385,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         const headers = new Headers()
         headers.append('Set-Cookie', `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
         headers.append('Set-Cookie', `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
+        headers.append('Set-Cookie', `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
         return new Response(null, { status: 401 })
     }
 
@@ -325,13 +412,18 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 'Set-Cookie',
                 `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
             )
+            headers.append(
+                'Set-Cookie',
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+            )
             return new Response(null, {
                 status: 302,
                 headers,
             })
         }
 
-        const refreshResponse = await refreshTokenWithAccessAndRefreshToken(refreshToken)
+        const activeOrgId = req.cookies.get(ACTIVE_ORG_ID_COOKIE_NAME)?.value
+        const refreshResponse = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
         if (refreshResponse.error === 'unexpected') {
             console.error('Unexpected error while refreshing access token')
             return new Response('Unexpected error', { status: 500 })
@@ -345,6 +437,10 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             headers.append(
                 'Set-Cookie',
                 `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+            )
+            headers.append(
+                'Set-Cookie',
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
             )
             return new Response(null, {
                 status: 302,
@@ -372,6 +468,10 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 'Set-Cookie',
                 `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
             )
+            headers.append(
+                'Set-Cookie',
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+            )
             return new Response(null, { status: 200, headers })
         }
 
@@ -398,7 +498,81 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         const headers = new Headers()
         headers.append('Set-Cookie', `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
         headers.append('Set-Cookie', `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
+        headers.append('Set-Cookie', `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
         return new Response(null, { status: 200, headers })
+    }
+
+    async function setActiveOrgHandler(req: NextRequest) {
+        const oldRefreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
+        const activeOrgId = req.nextUrl.searchParams.get('active_org_id')
+
+        if (!oldRefreshToken) {
+            const headers = new Headers()
+            headers.append(
+                'Set-Cookie',
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+            )
+            return new Response(null, { status: 401, headers })
+        }
+
+        if (!activeOrgId) {
+            return new Response(null, { status: 400 })
+        }
+
+        const refreshResponse = await refreshTokenWithAccessAndRefreshToken(oldRefreshToken, activeOrgId)
+        if (refreshResponse.error === 'unexpected') {
+            throw new Error('Unexpected error while setting active org id')
+        } else if (refreshResponse.error === 'unauthorized') {
+            return new Response('Unauthorized', { status: 401 })
+        }
+
+        const refreshToken = refreshResponse.refreshToken
+        const accessToken = refreshResponse.accessToken
+
+        const authUrlOrigin = getAuthUrlOrigin()
+        const path = `${authUrlOrigin}/propelauth/oauth/userinfo`
+        const response = await fetch(path, {
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer ' + accessToken,
+            },
+        })
+
+        if (response.ok) {
+            const userFromToken = await validateAccessToken(accessToken)
+            const data = await response.json()
+            const jsonResponse = {
+                userinfo: data,
+                accessToken,
+                impersonatorUserId: userFromToken.impersonatorUserId,
+                activeOrgId,
+            }
+
+            const headers = new Headers()
+            headers.append(
+                'Set-Cookie',
+                `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+            )
+            headers.append(
+                'Set-Cookie',
+                `${REFRESH_TOKEN_COOKIE_NAME}=${refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+            )
+            headers.append(
+                'Set-Cookie',
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=${activeOrgId}; Path=/; HttpOnly; Secure; SameSite=Lax`
+            )
+            headers.append('Content-Type', 'application/json')
+            return new Response(JSON.stringify(jsonResponse), {
+                status: 200,
+                headers,
+            })
+        } else if (response.status === 401) {
+            return new Response(null, {
+                status: 401,
+            })
+        } else {
+            return new Response(null, { status: 500 })
+        }
     }
 
     function getRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
@@ -420,6 +594,8 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
     function postRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
         if (params.slug === 'logout') {
             return logoutPostHandler(req)
+        } else if (params.slug === 'set-active-org') {
+            return setActiveOrgHandler(req)
         } else {
             return new Response('', { status: 404 })
         }
@@ -436,4 +612,55 @@ function randomState(): string {
     return Array.from(randomBytes)
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('')
+}
+
+function redirectToLogin(redirectOptions?: RedirectOptions) {
+    if (!redirectOptions) {
+        redirect(LOGIN_PATH)
+
+    } else if (redirectOptions.returnToPath) {
+        const loginPath = LOGIN_PATH + '?return_to_path=' + encodeURI(redirectOptions.returnToPath)
+        redirect(loginPath)
+
+    } else if (redirectOptions.returnToCurrentPath) {
+        const encodedPath = getUrlEncodedRedirectPathForCurrentUrl()
+        if (encodedPath) {
+            const loginPath = LOGIN_PATH + '?return_to_path=' + encodedPath
+            redirect(loginPath)
+
+        } else {
+            console.warn('Could not get current URL to redirect to')
+            redirect(LOGIN_PATH)
+        }
+    }
+}
+
+export function getUrlEncodedRedirectPathForCurrentUrl(): string | undefined {
+    const url = getCurrentUrl()
+    if (!url) {
+        return undefined
+    }
+
+    try {
+        const urlObj = new URL(url)
+        return encodeURIComponent(urlObj.pathname + urlObj.search)
+    } catch (e) {
+        console.warn('Current URL is not a valid URL')
+        return undefined
+    }
+}
+
+// It's really common to want to redirect back to the exact location you are on
+// Next.js unfortunately makes this pretty hard, as server components don't have access to the URL
+// The only good way to do this is to set up some middleware and pass the URL down from the middleware
+// Since we have the requirement that people set up middleware with us anyway, it's easy for us to expose
+// this functionality
+export function getCurrentUrl(): string | undefined {
+    const url = headers().get(CUSTOM_HEADER_FOR_URL)
+    if (!url) {
+        console.warn('Attempting to redirect to the current URL, but we could not find the current URL in the headers. Is the middleware set up?')
+        return undefined
+    } else {
+        return url
+    }
 }
