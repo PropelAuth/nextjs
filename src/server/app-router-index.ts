@@ -6,5 +6,6 @@ export {
     getAccessToken,
     authMiddleware,
     getCurrentUrl,
+    getCurrentPath,
 } from './app-router'
 export type { RouteHandlerArgs, RedirectOptions } from './app-router'

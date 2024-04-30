@@ -6,6 +6,7 @@ import {
     CALLBACK_PATH,
     COOKIE_OPTIONS,
     CUSTOM_HEADER_FOR_ACCESS_TOKEN,
+    CUSTOM_HEADER_FOR_PATH,
     CUSTOM_HEADER_FOR_URL,
     getAuthUrlOrigin,
     getIntegrationApiKey,
@@ -64,11 +65,7 @@ export function getAccessToken(): string | undefined {
 // You CAN, however, pass in custom headers,
 //   so we'll use CUSTOM_HEADER_FOR_ACCESS_TOKEN as a workaround
 export async function authMiddleware(req: NextRequest): Promise<Response> {
-    if (req.headers.has(CUSTOM_HEADER_FOR_ACCESS_TOKEN)) {
-        throw new Error(`${CUSTOM_HEADER_FOR_ACCESS_TOKEN} is set which is for internal use only`)
-    } else if (req.headers.has(CUSTOM_HEADER_FOR_URL)) {
-        throw new Error(`${CUSTOM_HEADER_FOR_URL} is set which is for internal use only`)
-    } else if (
+    if (
         req.nextUrl.pathname === CALLBACK_PATH ||
         req.nextUrl.pathname === LOGOUT_PATH ||
         req.nextUrl.pathname === USERINFO_PATH
@@ -113,6 +110,7 @@ export async function authMiddleware(req: NextRequest): Promise<Response> {
 function getNextResponse(request: NextRequest, newAccessToken?: string) {
     const headers = new Headers(request.headers)
     headers.set(CUSTOM_HEADER_FOR_URL, request.nextUrl.toString())
+    headers.set(CUSTOM_HEADER_FOR_PATH, request.nextUrl.pathname + request.nextUrl.search)
     if (newAccessToken) {
         headers.set(CUSTOM_HEADER_FOR_ACCESS_TOKEN, newAccessToken)
     }
@@ -623,7 +621,7 @@ function redirectToLogin(redirectOptions?: RedirectOptions) {
         redirect(loginPath)
 
     } else if (redirectOptions.returnToCurrentPath) {
-        const encodedPath = getUrlEncodedRedirectPathForCurrentUrl()
+        const encodedPath = getUrlEncodedRedirectPathForCurrentPath()
         if (encodedPath) {
             const loginPath = LOGIN_PATH + '?return_to_path=' + encodedPath
             redirect(loginPath)
@@ -635,27 +633,36 @@ function redirectToLogin(redirectOptions?: RedirectOptions) {
     }
 }
 
-export function getUrlEncodedRedirectPathForCurrentUrl(): string | undefined {
-    const url = getCurrentUrl()
-    if (!url) {
+export function getUrlEncodedRedirectPathForCurrentPath(): string | undefined {
+    const path = getCurrentPath()
+    if (!path) {
         return undefined
     }
 
-    try {
-        const urlObj = new URL(url)
-        return encodeURIComponent(urlObj.pathname + urlObj.search)
-    } catch (e) {
-        console.warn('Current URL is not a valid URL')
-        return undefined
-    }
+    return encodeURIComponent(path)
 }
 
 // It's really common to want to redirect back to the exact location you are on
-// Next.js unfortunately makes this pretty hard, as server components don't have access to the URL
-// The only good way to do this is to set up some middleware and pass the URL down from the middleware
+// Next.js unfortunately makes this pretty hard, as server components don't have access to the path
+// The only good way to do this is to set up some middleware and pass the path down from the middleware
 // Since we have the requirement that people set up middleware with us anyway, it's easy for us to expose
 // this functionality
+export function getCurrentPath(): string | undefined {
+    const path = headers().get(CUSTOM_HEADER_FOR_PATH)
+    if (!path) {
+        console.warn('Attempting to redirect to the current path, but we could not find the current path in the headers. Is the middleware set up?')
+        return undefined
+    } else {
+        return path
+    }
+}
+
+/**
+ * @deprecated since version 0.1.0
+ * Use getCurrentPath instead
+ */
 export function getCurrentUrl(): string | undefined {
+    console.warn("getCurrentUrl is deprecated in favor of getCurrentPath.")
     const url = headers().get(CUSTOM_HEADER_FOR_URL)
     if (!url) {
         console.warn('Attempting to redirect to the current URL, but we could not find the current URL in the headers. Is the middleware set up?')
