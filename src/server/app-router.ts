@@ -657,6 +657,10 @@ export function getCurrentPath(): string | undefined {
     }
 }
 
+/**
+ * @deprecated since version 0.1.0
+ * Use getCurrentPath instead
+ */
 export function getCurrentUrl(): string | undefined {
     console.warn("getCurrentUrl is deprecated in favor of getCurrentPath.")
     const url = headers().get(CUSTOM_HEADER_FOR_URL)
