@@ -27,9 +27,7 @@ export function doesLocalStorageMatch(newValue: string | null, user: UserFromTok
         return false
     }
 
-    removeUndefinedValues(user)
-
-    return isEqual(parsed, user)
+    return isEqual(parsed, jsonSerialize(user))
 }
 
 export function isEqual(a: any, b: any): boolean {
@@ -78,10 +76,7 @@ export function isEqual(a: any, b: any): boolean {
     }
 }
 
-function removeUndefinedValues(obj: Record<string, any>) {
-    for (const key in obj) {
-        if (obj.hasOwnProperty(key) && obj[key] === undefined) {
-            delete obj[key]
-        }
-    }
+// We need to make sure that the comparison is done with objects that have gone through the same transformation, so we mimic the localStorage transformation to json and back
+function jsonSerialize(userFromToken: UserFromToken) {
+    return JSON.parse(JSON.stringify(userFromToken))
 }
