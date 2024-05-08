@@ -27,6 +27,8 @@ export function doesLocalStorageMatch(newValue: string | null, user: UserFromTok
         return false
     }
 
+    removeUndefinedValues(user)
+
     return isEqual(parsed, user)
 }
 
@@ -73,5 +75,13 @@ export function isEqual(a: any, b: any): boolean {
         return true
     } else {
         return a === b
+    }
+}
+
+function removeUndefinedValues(obj: Record<string, any>) {
+    for (const key in obj) {
+        if (obj.hasOwnProperty(key) && obj[key] === undefined) {
+            delete obj[key]
+        }
     }
 }
