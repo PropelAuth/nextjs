@@ -27,7 +27,7 @@ export function doesLocalStorageMatch(newValue: string | null, user: UserFromTok
         return false
     }
 
-    return isEqual(parsed, user)
+    return isEqual(parsed, jsonSerialize(user))
 }
 
 export function isEqual(a: any, b: any): boolean {
@@ -74,4 +74,9 @@ export function isEqual(a: any, b: any): boolean {
     } else {
         return a === b
     }
+}
+
+// We need to make sure that the comparison is done with objects that have gone through the same transformation, so we mimic the localStorage transformation to json and back
+function jsonSerialize(userFromToken: UserFromToken) {
+    return JSON.parse(JSON.stringify(userFromToken))
 }
