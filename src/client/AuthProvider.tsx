@@ -28,6 +28,7 @@ interface InternalAuthState {
     redirectToSignupPage: (opts?: RedirectToSignupOptions) => void
     redirectToAccountPage: (opts?: RedirectOptions) => void
     redirectToOrgPage: (orgId?: string, opts?: RedirectOptions) => void
+    redirectToOrgSettingsPage: (orgId?: string, opts?: RedirectOptions) => void
     redirectToCreateOrgPage: (opts?: RedirectOptions) => void
     redirectToSetupSAMLPage: (orgId: string, opts?: RedirectOptions) => void
 
@@ -35,6 +36,7 @@ interface InternalAuthState {
     getLoginPageUrl(opts?: RedirectToLoginOptions): string
     getAccountPageUrl(opts?: RedirectOptions): string
     getOrgPageUrl(orgId?: string, opts?: RedirectOptions): string
+    getOrgSettingsPageUrl(orgId?: string, opts?: RedirectOptions): string
     getCreateOrgPageUrl(opts?: RedirectOptions): string
     getSetupSAMLPageUrl(orgId: string, opts?: RedirectOptions): string
 
@@ -257,6 +259,16 @@ export const AuthProvider = (props: AuthProviderProps) => {
         },
         [props.authUrl]
     )
+    const getOrgSettingsPageUrl = useCallback(
+        (orgId?: string, opts?: RedirectOptions) => {
+            if (orgId) {
+                return addReturnToPath(`${props.authUrl}/org/settings/${orgId}`, opts?.redirectBackToUrl)
+            } else {
+                return addReturnToPath(`${props.authUrl}/org/settings`, opts?.redirectBackToUrl)
+            }
+        },
+        [props.authUrl]
+    )
     const getCreateOrgPageUrl = useCallback(
         (opts?: RedirectOptions) => {
             return addReturnToPath(`${props.authUrl}/create_org`, opts?.redirectBackToUrl)
@@ -279,6 +291,8 @@ export const AuthProvider = (props: AuthProviderProps) => {
     const redirectToSignupPage = (opts?: RedirectToSignupOptions) => redirectTo(getSignupPageUrl(opts))
     const redirectToAccountPage = (opts?: RedirectOptions) => redirectTo(getAccountPageUrl(opts))
     const redirectToOrgPage = (orgId?: string, opts?: RedirectOptions) => redirectTo(getOrgPageUrl(orgId, opts))
+    const redirectToOrgSettingsPage = (orgId?: string, opts?: RedirectOptions) =>
+        redirectTo(getOrgSettingsPageUrl(orgId, opts))
     const redirectToCreateOrgPage = (opts?: RedirectOptions) => redirectTo(getCreateOrgPageUrl(opts))
     const redirectToSetupSAMLPage = (orgId: string, opts?: RedirectOptions) =>
         redirectTo(getSetupSAMLPageUrl(orgId, opts))
@@ -314,12 +328,14 @@ export const AuthProvider = (props: AuthProviderProps) => {
         redirectToSignupPage,
         redirectToAccountPage,
         redirectToOrgPage,
+        redirectToOrgSettingsPage,
         redirectToCreateOrgPage,
         redirectToSetupSAMLPage,
         getLoginPageUrl,
         getSignupPageUrl,
         getAccountPageUrl,
         getOrgPageUrl,
+        getOrgSettingsPageUrl,
         getCreateOrgPageUrl,
         getSetupSAMLPageUrl,
         refreshAuthInfo,

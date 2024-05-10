@@ -11,6 +11,7 @@ export function useRedirectFunctions() {
         redirectToSignupPage,
         redirectToLoginPage,
         redirectToOrgPage,
+        redirectToOrgSettingsPage,
         redirectToCreateOrgPage,
         redirectToSetupSAMLPage,
     } = context
@@ -19,6 +20,7 @@ export function useRedirectFunctions() {
         redirectToLoginPage,
         redirectToAccountPage,
         redirectToOrgPage,
+        redirectToOrgSettingsPage,
         redirectToCreateOrgPage,
         redirectToSetupSAMLPage,
     }
