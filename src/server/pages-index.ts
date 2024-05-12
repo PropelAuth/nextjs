@@ -2,6 +2,7 @@ export {
     getUserFromServerSideProps,
     getUserFromApiRouteRequest,
     getAuthInfoFromApiRouteRequest,
-    getAuthInfoFromServerSideProps
-} from "./pages"
-export type {AuthInfo} from "./pages"
+    getAuthInfoFromServerSideProps,
+    getRouteHandlers,
+} from './pages'
+export type { AuthInfo, RouteHandlerPagesArgs } from './pages'

@@ -168,3 +168,7 @@ export async function validateAccessToken(accessToken: string | undefined): Prom
         }
     }
 }
+
+export function assertNever(_: never): never {
+    throw new Error('Unexpected error')
+}
