@@ -283,13 +283,13 @@ export const AuthProvider = (props: AuthProviderProps) => {
         },
         [props.authUrl]
     )
-    
+
     const getOrgApiKeysPageUrl = useCallback(
         (orgId?: string) => {
             if (orgId) {
-                return return addReturnToPath(`${props.authUrl}/org/api_keys/${orgId}`)
+                return addReturnToPath(`${props.authUrl}/org/api_keys/${orgId}`)
             } else {
-                return `${props.authUrl}/org/api_keys`
+                return addReturnToPath(`${props.authUrl}/org/api_keys`)
             }
         },
         [props.authUrl]
@@ -309,7 +309,6 @@ export const AuthProvider = (props: AuthProviderProps) => {
     const redirectToSetupSAMLPage = (orgId: string, opts?: RedirectOptions) =>
         redirectTo(getSetupSAMLPageUrl(orgId, opts))
     const redirectToOrgApiKeysPage = (orgId?: string) => redirectTo(getOrgApiKeysPageUrl(orgId))
-
 
     const refreshAuthInfo = useCallback(async () => {
         const action = await apiGetUserInfo()
@@ -352,6 +351,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
         getOrgPageUrl,
         getOrgSettingsPageUrl,
         getCreateOrgPageUrl,
+        getOrgApiKeysPageUrl,
         getSetupSAMLPageUrl,
         refreshAuthInfo,
         setActiveOrg,
