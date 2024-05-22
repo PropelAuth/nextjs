@@ -1,80 +1,134 @@
-import {GetServerSidePropsContext, NextApiRequest, NextApiResponse} from "next";
+import {GetServerSidePropsContext, NextApiRequest, NextApiResponse} from 'next'
 import {
     ACCESS_TOKEN_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
-    refreshTokenWithAccessAndRefreshToken, validateAccessToken,
-    validateAccessTokenOrUndefined
-} from "./shared";
+    refreshTokenWithAccessAndRefreshToken,
+    validateAccessToken,
+    validateAccessTokenOrUndefined,
+} from './shared'
+import {ACTIVE_ORG_ID_COOKIE_NAME} from '../shared'
+import {UserFromToken} from "../user";
 
-export async function getUserFromServerSideProps(props: GetServerSidePropsContext, forceRefresh: boolean = false) {
+export type AuthInfo = {
+    user: UserFromToken
+    accessToken: string
+} | {
+    user: undefined
+    accessToken: undefined
+}
+
+export async function getAuthInfoFromServerSideProps(props: GetServerSidePropsContext, forceRefresh: boolean = false): Promise<AuthInfo> {
     const accessToken = props.req.cookies[ACCESS_TOKEN_COOKIE_NAME]
     const refreshToken = props.req.cookies[REFRESH_TOKEN_COOKIE_NAME]
+    const activeOrgId = props.req.cookies[ACTIVE_ORG_ID_COOKIE_NAME]
 
     // If we are authenticated, we can continue
     if (accessToken && !forceRefresh) {
         const user = await validateAccessTokenOrUndefined(accessToken)
         if (user) {
-            return user
+            return {
+                user,
+                accessToken,
+            }
         }
     }
 
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
-        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken)
-        if (response.error === "unexpected") {
-            throw new Error("Unexpected error while refreshing access token")
-        } else if (response.error === "unauthorized") {
-            props.res.setHeader("Set-Cookie", [
+        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
+        if (response.error === 'unexpected') {
+            throw new Error('Unexpected error while refreshing access token')
+        } else if (response.error === 'unauthorized') {
+            props.res.setHeader('Set-Cookie', [
                 `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
                 `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
             ])
-            return undefined
+            return {
+                user: undefined,
+                accessToken: undefined,
+            }
         } else {
             const user = await validateAccessToken(response.accessToken)
-            props.res.setHeader("Set-Cookie", [
+            props.res.setHeader('Set-Cookie', [
                 `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`,
                 `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`,
             ])
-            return user
+            return {
+                user,
+                accessToken: response.accessToken
+            }
         }
     }
 
-    return undefined
+    return {
+        user: undefined,
+        accessToken: undefined,
+    }
 }
 
-export async function getUserFromApiRouteRequest(req: NextApiRequest, res: NextApiResponse) {
+export async function getUserFromServerSideProps(props: GetServerSidePropsContext, forceRefresh: boolean = false) {
+    const {user} = await getAuthInfoFromServerSideProps(props, forceRefresh)
+    return user
+}
+
+export async function getAuthInfoFromApiRouteRequest(
+    req: NextApiRequest,
+    res: NextApiResponse,
+    forceRefresh: boolean = false
+): Promise<AuthInfo> {
     const accessToken = req.cookies[ACCESS_TOKEN_COOKIE_NAME]
     const refreshToken = req.cookies[REFRESH_TOKEN_COOKIE_NAME]
+    const activeOrgId = req.cookies[ACTIVE_ORG_ID_COOKIE_NAME]
 
     // If we are authenticated, we can continue
-    if (accessToken) {
+    if (accessToken && !forceRefresh) {
         const user = await validateAccessTokenOrUndefined(accessToken)
         if (user) {
-            return user
+            return {
+                user,
+                accessToken,
+            }
         }
     }
 
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
-        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken)
-        if (response.error === "unexpected") {
-            throw new Error("Unexpected error while refreshing access token")
-        } else if (response.error === "unauthorized") {
-            res.setHeader("Set-Cookie", [
+        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
+        if (response.error === 'unexpected') {
+            throw new Error('Unexpected error while refreshing access token')
+        } else if (response.error === 'unauthorized') {
+            res.setHeader('Set-Cookie', [
                 `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
                 `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
             ])
-            return undefined
+            return {
+                user: undefined,
+                accessToken: undefined,
+            }
         } else {
             const user = await validateAccessToken(response.accessToken)
-            res.setHeader("Set-Cookie", [
+            res.setHeader('Set-Cookie', [
                 `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`,
                 `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`,
             ])
-            return user
+            return {
+                user,
+                accessToken: response.accessToken,
+            }
         }
     }
 
-    return undefined
+    return {
+        user: undefined,
+        accessToken: undefined,
+    }
+}
 
+export async function getUserFromApiRouteRequest(
+    req: NextApiRequest,
+    res: NextApiResponse,
+    forceRefresh: boolean = false
+) {
+    const {user} = await getAuthInfoFromApiRouteRequest(req, res, forceRefresh)
+    return user
 }

@@ -1,16 +1,17 @@
-import { useContext } from "react"
-import { AuthContext } from "./AuthProvider"
+import { useContext } from 'react'
+import { AuthContext } from './AuthProvider'
 
 export function useHostedPageUrls() {
     const context = useContext(AuthContext)
     if (context === undefined) {
-        throw new Error("useHostedPageUrls must be used within an AuthProvider")
+        throw new Error('useHostedPageUrls must be used within an AuthProvider')
     }
     const {
         getLoginPageUrl,
         getSignupPageUrl,
         getAccountPageUrl,
         getOrgPageUrl,
+        getOrgSettingsPageUrl,
         getCreateOrgPageUrl,
         getSetupSAMLPageUrl,
     } = context
@@ -19,6 +20,7 @@ export function useHostedPageUrls() {
         getSignupPageUrl,
         getAccountPageUrl,
         getOrgPageUrl,
+        getOrgSettingsPageUrl,
         getCreateOrgPageUrl,
         getSetupSAMLPageUrl,
     }
