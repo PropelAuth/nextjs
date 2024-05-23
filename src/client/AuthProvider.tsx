@@ -31,7 +31,7 @@ interface InternalAuthState {
     redirectToOrgSettingsPage: (orgId?: string, opts?: RedirectOptions) => void
     redirectToCreateOrgPage: (opts?: RedirectOptions) => void
     redirectToSetupSAMLPage: (orgId: string, opts?: RedirectOptions) => void
-    redirectToOrgApiKeysPage: (orgId?: string) => void
+    redirectToOrgApiKeysPage: (orgId?: string, opts?: RedirectOptions) => void
 
     getSignupPageUrl(opts?: RedirectToSignupOptions): string
     getLoginPageUrl(opts?: RedirectToLoginOptions): string
@@ -40,7 +40,7 @@ interface InternalAuthState {
     getOrgSettingsPageUrl(orgId?: string, opts?: RedirectOptions): string
     getCreateOrgPageUrl(opts?: RedirectOptions): string
     getSetupSAMLPageUrl(orgId: string, opts?: RedirectOptions): string
-    getOrgApiKeysPageUrl(orgId?: string): string
+    getOrgApiKeysPageUrl(orgId?: string, opts?: RedirectOptions): string
 
     refreshAuthInfo: () => Promise<User | undefined>
     setActiveOrg: (orgId: string) => Promise<User | undefined>
@@ -286,11 +286,11 @@ export const AuthProvider = (props: AuthProviderProps) => {
     )
 
     const getOrgApiKeysPageUrl = useCallback(
-        (orgId?: string) => {
+        (orgId?: string, opts?: RedirectOptions) => {
             if (orgId) {
-                return addReturnToPath(`${props.authUrl}/org/api_keys/${orgId}`)
+                return addReturnToPath(`${props.authUrl}/org/api_keys/${orgId}`, opts?.redirectBackToUrl)
             } else {
-                return addReturnToPath(`${props.authUrl}/org/api_keys`)
+                return addReturnToPath(`${props.authUrl}/org/api_keys`, opts?.redirectBackToUrl)
             }
         },
         [props.authUrl]
@@ -309,7 +309,8 @@ export const AuthProvider = (props: AuthProviderProps) => {
     const redirectToCreateOrgPage = (opts?: RedirectOptions) => redirectTo(getCreateOrgPageUrl(opts))
     const redirectToSetupSAMLPage = (orgId: string, opts?: RedirectOptions) =>
         redirectTo(getSetupSAMLPageUrl(orgId, opts))
-    const redirectToOrgApiKeysPage = (orgId?: string) => redirectTo(getOrgApiKeysPageUrl(orgId))
+    const redirectToOrgApiKeysPage = (orgId?: string, opts?: RedirectOptions) =>
+        redirectTo(getOrgApiKeysPageUrl(orgId, opts))
 
     const refreshAuthInfo = useCallback(async () => {
         const action = await apiGetUserInfo()
