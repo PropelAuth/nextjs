@@ -31,6 +31,7 @@ interface InternalAuthState {
     redirectToOrgSettingsPage: (orgId?: string, opts?: RedirectOptions) => void
     redirectToCreateOrgPage: (opts?: RedirectOptions) => void
     redirectToSetupSAMLPage: (orgId: string, opts?: RedirectOptions) => void
+    redirectToOrgApiKeysPage: (orgId?: string) => void
 
     getSignupPageUrl(opts?: RedirectToSignupOptions): string
     getLoginPageUrl(opts?: RedirectToLoginOptions): string
