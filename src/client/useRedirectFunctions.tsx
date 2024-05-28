@@ -14,6 +14,7 @@ export function useRedirectFunctions() {
         redirectToOrgSettingsPage,
         redirectToCreateOrgPage,
         redirectToSetupSAMLPage,
+        redirectToOrgApiKeysPage,
     } = context
     return {
         redirectToSignupPage,
@@ -23,6 +24,7 @@ export function useRedirectFunctions() {
         redirectToOrgSettingsPage,
         redirectToCreateOrgPage,
         redirectToSetupSAMLPage,
+        redirectToOrgApiKeysPage,
     }
 }
 
