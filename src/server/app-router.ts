@@ -24,13 +24,15 @@ import {
 import { UserFromToken } from './index'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
 
-export type RedirectOptions = {
-    returnToPath: string
-    returnToCurrentPath?: never
-} | {
-    returnToPath?: never
-    returnToCurrentPath: boolean
-}
+export type RedirectOptions =
+    | {
+          returnToPath: string
+          returnToCurrentPath?: never
+      }
+    | {
+          returnToPath?: never
+          returnToCurrentPath: boolean
+      }
 
 export async function getUserOrRedirect(redirectOptions?: RedirectOptions): Promise<UserFromToken> {
     const user = await getUser()
@@ -253,10 +255,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                         'Set-Cookie',
                         `${ACTIVE_ORG_ID_COOKIE_NAME}=${activeOrgId}; Path=/; HttpOnly; Secure; SameSite=Lax`
                     )
-                    headers.append(
-                        'Set-Cookie',
-                        `${RETURN_TO_PATH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
-                    )
+                    headers.append('Set-Cookie', getCookieForReturnToPathInCallback(returnToPathFromCookie))
                     return new Response(null, {
                         status: 302,
                         headers,
@@ -278,10 +277,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 'Set-Cookie',
                 `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
             )
-            headers.append(
-                'Set-Cookie',
-                `${RETURN_TO_PATH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
-            )
+            headers.append('Set-Cookie', getCookieForReturnToPathInCallback(returnToPathFromCookie))
             return new Response(null, {
                 status: 302,
                 headers,
@@ -615,17 +611,14 @@ function randomState(): string {
 function redirectToLogin(redirectOptions?: RedirectOptions) {
     if (!redirectOptions) {
         redirect(LOGIN_PATH)
-
     } else if (redirectOptions.returnToPath) {
         const loginPath = LOGIN_PATH + '?return_to_path=' + encodeURI(redirectOptions.returnToPath)
         redirect(loginPath)
-
     } else if (redirectOptions.returnToCurrentPath) {
         const encodedPath = getUrlEncodedRedirectPathForCurrentPath()
         if (encodedPath) {
             const loginPath = LOGIN_PATH + '?return_to_path=' + encodedPath
             redirect(loginPath)
-
         } else {
             console.warn('Could not get current URL to redirect to')
             redirect(LOGIN_PATH)
@@ -642,6 +635,15 @@ export function getUrlEncodedRedirectPathForCurrentPath(): string | undefined {
     return encodeURIComponent(path)
 }
 
+// We should keep the redirect path around for a short period in case multiple windows are racing
+function getCookieForReturnToPathInCallback(returnToPathFromCookie: string | undefined) {
+    if (returnToPathFromCookie) {
+        return `${RETURN_TO_PATH_COOKIE_NAME}=${returnToPathFromCookie}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=15`
+    } else {
+        return `${RETURN_TO_PATH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+    }
+}
+
 // It's really common to want to redirect back to the exact location you are on
 // Next.js unfortunately makes this pretty hard, as server components don't have access to the path
 // The only good way to do this is to set up some middleware and pass the path down from the middleware
@@ -650,7 +652,9 @@ export function getUrlEncodedRedirectPathForCurrentPath(): string | undefined {
 export function getCurrentPath(): string | undefined {
     const path = headers().get(CUSTOM_HEADER_FOR_PATH)
     if (!path) {
-        console.warn('Attempting to redirect to the current path, but we could not find the current path in the headers. Is the middleware set up?')
+        console.warn(
+            'Attempting to redirect to the current path, but we could not find the current path in the headers. Is the middleware set up?'
+        )
         return undefined
     } else {
         return path
@@ -662,10 +666,12 @@ export function getCurrentPath(): string | undefined {
  * Use getCurrentPath instead
  */
 export function getCurrentUrl(): string | undefined {
-    console.warn("getCurrentUrl is deprecated in favor of getCurrentPath.")
+    console.warn('getCurrentUrl is deprecated in favor of getCurrentPath.')
     const url = headers().get(CUSTOM_HEADER_FOR_URL)
     if (!url) {
-        console.warn('Attempting to redirect to the current URL, but we could not find the current URL in the headers. Is the middleware set up?')
+        console.warn(
+            'Attempting to redirect to the current URL, but we could not find the current URL in the headers. Is the middleware set up?'
+        )
         return undefined
     } else {
         return url
