@@ -140,7 +140,7 @@ export class UserFromToken {
             payload.last_name,
             payload.username,
             payload.legacy_user_id,
-            payload.impersonatorUserId,
+            payload.impersonator_user_id,
             payload.properties,
             activeOrgId,
             loginMethod
@@ -289,7 +289,7 @@ export type InternalUser = {
 
     // If you used our migration APIs to migrate this user from a different system, this is their original ID from that system.
     legacy_user_id?: string
-    impersonatorUserId?: string
+    impersonator_user_id?: string
 }
 
 export function toUser(snake_case: InternalUser): UserFromToken {
