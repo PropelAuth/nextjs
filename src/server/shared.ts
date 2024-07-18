@@ -76,7 +76,7 @@ export function getVerifierKey() {
     return verifierKey.replace(/\\n/g, '\n')
 }
 
-export function getSameSiteCookieValue() {
+export function getSameSiteCookieValue(): "none" | "lax" | "strict" {
     const sameSiteOverride = process.env.PROPELAUTH_SAME_SITE_COOKIE_OVERRIDE
     if (sameSiteOverride === 'none') {
         return 'none'
