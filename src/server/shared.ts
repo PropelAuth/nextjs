@@ -36,7 +36,6 @@ export const RETURN_TO_PATH_COOKIE_NAME = '__pa_return_to_path'
 
 export const COOKIE_OPTIONS: Partial<ResponseCookie> = {
     httpOnly: true,
-    sameSite: 'lax',
     secure: true,
     path: '/',
 }
@@ -75,6 +74,23 @@ export function getVerifierKey() {
         throw new Error('PROPELAUTH_VERIFIER_KEY is not set')
     }
     return verifierKey.replace(/\\n/g, '\n')
+}
+
+export function getSameSiteCookieValue(): "none" | "lax" | "strict" {
+    const sameSiteOverride = process.env.PROPELAUTH_SAME_SITE_COOKIE_OVERRIDE
+    if (sameSiteOverride === 'none') {
+        return 'none'
+    } else if (sameSiteOverride === 'lax') {
+        return 'lax'
+    } else if (sameSiteOverride === 'strict') {
+        return 'strict'
+    } else if (sameSiteOverride) {
+        throw new Error(
+            'Invalid value for PROPELAUTH_SAME_SITE_COOKIE_OVERRIDE, must be one of "none", "lax", or "strict"'
+        )
+    } else {
+        return 'lax'
+    }
 }
 
 export async function refreshTokenWithAccessAndRefreshToken(

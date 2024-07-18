@@ -11,6 +11,7 @@ import {
     getAuthUrlOrigin,
     getIntegrationApiKey,
     getRedirectUri,
+    getSameSiteCookieValue,
     LOGIN_PATH,
     LOGOUT_PATH,
     REFRESH_TOKEN_COOKIE_NAME,
@@ -99,9 +100,10 @@ export async function authMiddleware(req: NextRequest): Promise<Response> {
             response.cookies.delete(REFRESH_TOKEN_COOKIE_NAME)
             return response
         } else {
+            const sameSite = getSameSiteCookieValue()
             const nextResponse = getNextResponse(req, response.accessToken)
-            nextResponse.cookies.set(ACCESS_TOKEN_COOKIE_NAME, response.accessToken, COOKIE_OPTIONS)
-            nextResponse.cookies.set(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken, COOKIE_OPTIONS)
+            nextResponse.cookies.set(ACCESS_TOKEN_COOKIE_NAME, response.accessToken, { ...COOKIE_OPTIONS, sameSite })
+            nextResponse.cookies.set(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken, { ...COOKIE_OPTIONS, sameSite })
             return nextResponse
         }
     }
@@ -141,6 +143,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         const returnToPath = req.nextUrl.searchParams.get('return_to_path')
         const state = randomState()
         const redirectUri = getRedirectUri()
+        const sameSite = getSameSiteCookieValue()
 
         const authorizeUrlSearchParams = new URLSearchParams({
             redirect_uri: redirectUri,
@@ -151,12 +154,12 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
         const headers = new Headers()
         headers.append('Location', authorize_url)
-        headers.append('Set-Cookie', `${STATE_COOKIE_NAME}=${state}; Path=/; HttpOnly; Secure; SameSite=Lax`)
+        headers.append('Set-Cookie', `${STATE_COOKIE_NAME}=${state}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`)
         if (returnToPath) {
             if (returnToPath.startsWith('/')) {
                 headers.append(
                     'Set-Cookie',
-                    `${RETURN_TO_PATH_COOKIE_NAME}=${returnToPath}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`
+                    `${RETURN_TO_PATH_COOKIE_NAME}=${returnToPath}; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600`
                 )
             } else {
                 console.warn('return_to_path must start with /')
@@ -170,6 +173,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
     }
 
     async function callbackGetHandler(req: NextRequest) {
+        const sameSite = getSameSiteCookieValue()
         const oauthState = req.cookies.get(STATE_COOKIE_NAME)?.value
         if (!oauthState || oauthState.length !== 64) {
             return new Response(null, { status: 302, headers: { Location: LOGIN_PATH } })
@@ -245,15 +249,15 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                     headers.append('Location', returnToPath)
                     headers.append(
                         'Set-Cookie',
-                        `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                        `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
                     )
                     headers.append(
                         'Set-Cookie',
-                        `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                        `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
                     )
                     headers.append(
                         'Set-Cookie',
-                        `${ACTIVE_ORG_ID_COOKIE_NAME}=${activeOrgId}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                        `${ACTIVE_ORG_ID_COOKIE_NAME}=${activeOrgId}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
                     )
                     headers.append('Set-Cookie', getCookieForReturnToPathInCallback(returnToPathFromCookie))
                     return new Response(null, {
@@ -267,15 +271,15 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             headers.append('Location', returnToPath)
             headers.append(
                 'Set-Cookie',
-                `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
             )
             headers.append(
                 'Set-Cookie',
-                `${REFRESH_TOKEN_COOKIE_NAME}=${data.refresh_token}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                `${REFRESH_TOKEN_COOKIE_NAME}=${data.refresh_token}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
             )
             headers.append(
                 'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
             )
             headers.append('Set-Cookie', getCookieForReturnToPathInCallback(returnToPathFromCookie))
             return new Response(null, {
@@ -295,6 +299,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
     async function userinfoGetHandler(req: NextRequest) {
         const oldRefreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
         const activeOrgId = req.cookies.get(ACTIVE_ORG_ID_COOKIE_NAME)?.value
+        const sameSite = getSameSiteCookieValue()
 
         // For the userinfo endpoint, we want to get the most up-to-date info, so we'll refresh the access token
         if (oldRefreshToken) {
@@ -305,15 +310,15 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 const headers = new Headers()
                 headers.append(
                     'Set-Cookie',
-                    `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                    `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
                 )
                 headers.append(
                     'Set-Cookie',
-                    `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                    `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
                 )
                 headers.append(
                     'Set-Cookie',
-                    `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                    `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
                 )
                 return new Response('Unauthorized', { status: 401, headers })
             }
@@ -342,11 +347,11 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 const headers = new Headers()
                 headers.append(
                     'Set-Cookie',
-                    `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                    `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
                 )
                 headers.append(
                     'Set-Cookie',
-                    `${REFRESH_TOKEN_COOKIE_NAME}=${refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                    `${REFRESH_TOKEN_COOKIE_NAME}=${refreshToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
                 )
                 headers.append('Content-Type', 'application/json')
                 return new Response(JSON.stringify(jsonResponse), {
@@ -357,15 +362,15 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 const headers = new Headers()
                 headers.append(
                     'Set-Cookie',
-                    `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                    `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
                 )
                 headers.append(
                     'Set-Cookie',
-                    `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                    `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
                 )
                 headers.append(
                     'Set-Cookie',
-                    `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                    `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
                 )
                 return new Response(null, {
                     status: 401,
@@ -377,9 +382,18 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
 
         const headers = new Headers()
-        headers.append('Set-Cookie', `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
-        headers.append('Set-Cookie', `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
-        headers.append('Set-Cookie', `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
+        headers.append(
+            'Set-Cookie',
+            `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
+        )
+        headers.append(
+            'Set-Cookie',
+            `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
+        )
+        headers.append(
+            'Set-Cookie',
+            `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
+        )
         return new Response(null, { status: 401 })
     }
 
@@ -393,6 +407,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             console.error('postLoginPathFn returned undefined')
             return new Response('Unexpected error', { status: 500 })
         }
+        const sameSite = getSameSiteCookieValue()
 
         const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
         if (!refreshToken) {
@@ -400,15 +415,15 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             headers.append('Location', path)
             headers.append(
                 'Set-Cookie',
-                `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
             )
             headers.append(
                 'Set-Cookie',
-                `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
             )
             headers.append(
                 'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
             )
             return new Response(null, {
                 status: 302,
@@ -426,15 +441,15 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             headers.append('Location', path)
             headers.append(
                 'Set-Cookie',
-                `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
             )
             headers.append(
                 'Set-Cookie',
-                `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
             )
             headers.append(
                 'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
             )
             return new Response(null, {
                 status: 302,
@@ -451,20 +466,21 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
     }
 
     async function logoutPostHandler(req: NextRequest) {
+        const sameSite = getSameSiteCookieValue()
         const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
         if (!refreshToken) {
             const headers = new Headers()
             headers.append(
                 'Set-Cookie',
-                `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
             )
             headers.append(
                 'Set-Cookie',
-                `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
             )
             headers.append(
                 'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
             )
             return new Response(null, { status: 200, headers })
         }
@@ -490,21 +506,31 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             )
         }
         const headers = new Headers()
-        headers.append('Set-Cookie', `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
-        headers.append('Set-Cookie', `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
-        headers.append('Set-Cookie', `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
+        headers.append(
+            'Set-Cookie',
+            `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
+        )
+        headers.append(
+            'Set-Cookie',
+            `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
+        )
+        headers.append(
+            'Set-Cookie',
+            `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
+        )
         return new Response(null, { status: 200, headers })
     }
 
     async function setActiveOrgHandler(req: NextRequest) {
         const oldRefreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
         const activeOrgId = req.nextUrl.searchParams.get('active_org_id')
+        const sameSite = getSameSiteCookieValue()
 
         if (!oldRefreshToken) {
             const headers = new Headers()
             headers.append(
                 'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
             )
             return new Response(null, { status: 401, headers })
         }
@@ -545,15 +571,15 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             const headers = new Headers()
             headers.append(
                 'Set-Cookie',
-                `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
             )
             headers.append(
                 'Set-Cookie',
-                `${REFRESH_TOKEN_COOKIE_NAME}=${refreshToken}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                `${REFRESH_TOKEN_COOKIE_NAME}=${refreshToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
             )
             headers.append(
                 'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=${activeOrgId}; Path=/; HttpOnly; Secure; SameSite=Lax`
+                `${ACTIVE_ORG_ID_COOKIE_NAME}=${activeOrgId}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
             )
             headers.append('Content-Type', 'application/json')
             return new Response(JSON.stringify(jsonResponse), {
@@ -637,10 +663,12 @@ export function getUrlEncodedRedirectPathForCurrentPath(): string | undefined {
 
 // We should keep the redirect path around for a short period in case multiple windows are racing
 function getCookieForReturnToPathInCallback(returnToPathFromCookie: string | undefined) {
+    const sameSite = getSameSiteCookieValue()
+
     if (returnToPathFromCookie) {
-        return `${RETURN_TO_PATH_COOKIE_NAME}=${returnToPathFromCookie}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=15`
+        return `${RETURN_TO_PATH_COOKIE_NAME}=${returnToPathFromCookie}; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=15`
     } else {
-        return `${RETURN_TO_PATH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+        return `${RETURN_TO_PATH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
     }
 }
 
