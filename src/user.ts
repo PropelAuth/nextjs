@@ -1,5 +1,9 @@
+import { InternalLoginMethod, LoginMethod, toLoginMethod } from './loginMethod'
+
 export class UserFromToken {
     public userId: string
+
+    public activeOrgId?: string
     public orgIdToOrgMemberInfo?: OrgIdToOrgMemberInfo
 
     // Metadata about the user
@@ -9,6 +13,7 @@ export class UserFromToken {
     public username?: string
     public pictureUrl?: string
     public properties?: { [key: string]: unknown }
+    public loginMethod?: LoginMethod
 
     // If you used our migration APIs to migrate this user from a different system,
     //   this is their original ID from that system.
@@ -26,8 +31,12 @@ export class UserFromToken {
         impersonatorUserId?: string,
         properties?: { [key: string]: unknown },
         pictureUrl?: string
+        activeOrgId?: string,
+        loginMethod?: LoginMethod
     ) {
         this.userId = userId
+
+        this.activeOrgId = activeOrgId
         this.orgIdToOrgMemberInfo = orgIdToOrgMemberInfo
 
         this.email = email
@@ -40,6 +49,19 @@ export class UserFromToken {
 
         this.properties = properties
         this.pictureUrl = pictureUrl
+        this.loginMethod = loginMethod
+    }
+
+    public getActiveOrg(): OrgMemberInfo | undefined {
+        if (!this.activeOrgId || !this.orgIdToOrgMemberInfo) {
+            return undefined
+        }
+
+        return this.orgIdToOrgMemberInfo[this.activeOrgId]
+    }
+
+    public getActiveOrgId(): string | undefined {
+        return this.activeOrgId
     }
 
     public getOrg(orgId: string): OrgMemberInfo | undefined {
@@ -55,7 +77,7 @@ export class UserFromToken {
             return undefined
         }
 
-        const urlSafeOrgName = orgName.toLowerCase().replace(/ /g, "-")
+        const urlSafeOrgName = orgName.toLowerCase().replace(/ /g, '-')
         for (const orgId in this.orgIdToOrgMemberInfo) {
             const orgMemberInfo = this.orgIdToOrgMemberInfo[orgId]
             if (orgMemberInfo.urlSafeOrgName === urlSafeOrgName) {
@@ -82,9 +104,7 @@ export class UserFromToken {
         const obj = JSON.parse(json)
         const orgIdToOrgMemberInfo: OrgIdToOrgMemberInfo = {}
         for (const orgId in obj.orgIdToOrgMemberInfo) {
-            orgIdToOrgMemberInfo[orgId] = OrgMemberInfo.fromJSON(
-                JSON.stringify(obj.orgIdToOrgMemberInfo[orgId])
-            )
+            orgIdToOrgMemberInfo[orgId] = OrgMemberInfo.fromJSON(JSON.stringify(obj.orgIdToOrgMemberInfo[orgId]))
         }
         return new UserFromToken(
             obj.userId,
@@ -96,7 +116,38 @@ export class UserFromToken {
             obj.legacyUserId,
             obj.impersonatorUserId,
             obj.properties,
-            obj.pictureUrl
+            obj.pictureUrl,
+            obj.activeOrgId,
+            obj.loginMethod
+        )
+    }
+
+    public static fromJwtPayload(payload: InternalUser): UserFromToken {
+        let activeOrgId: string | undefined
+        let orgIdToOrgMemberInfo: OrgIdToOrgMemberInfo | undefined
+
+        if (payload.org_member_info) {
+            activeOrgId = payload.org_member_info.org_id
+            orgIdToOrgMemberInfo = toOrgIdToOrgMemberInfo({ [activeOrgId]: payload.org_member_info })
+        } else {
+            activeOrgId = undefined
+            orgIdToOrgMemberInfo = toOrgIdToOrgMemberInfo(payload.org_id_to_org_member_info)
+        }
+
+        const loginMethod = toLoginMethod(payload.login_method)
+
+        return new UserFromToken(
+            payload.user_id,
+            payload.email,
+            orgIdToOrgMemberInfo,
+            payload.first_name,
+            payload.last_name,
+            payload.username,
+            payload.legacy_user_id,
+            payload.impersonator_user_id,
+            payload.properties,
+            activeOrgId,
+            loginMethod
         )
     }
 }
@@ -105,15 +156,22 @@ export type OrgIdToOrgMemberInfo = {
     [orgId: string]: OrgMemberInfo
 }
 
+export enum OrgRoleStructure {
+    SingleRole = "single_role_in_hierarchy",
+    MultiRole = "multi_role",
+}
+
 export class OrgMemberInfo {
     public orgId: string
     public orgName: string
     public orgMetadata: { [key: string]: any }
     public urlSafeOrgName: string
+    public orgRoleStructure: OrgRoleStructure
 
     public userAssignedRole: string
     public userInheritedRolesPlusCurrentRole: string[]
     public userPermissions: string[]
+    public userAssignedAdditionalRoles: string[]
 
     constructor(
         orgId: string,
@@ -122,26 +180,38 @@ export class OrgMemberInfo {
         urlSafeOrgName: string,
         userAssignedRole: string,
         userInheritedRolesPlusCurrentRole: string[],
-        userPermissions: string[]
+        userPermissions: string[],
+        orgRoleStructure: OrgRoleStructure,
+        userAssignedAdditionalRoles: string[]
     ) {
         this.orgId = orgId
         this.orgName = orgName
         this.orgMetadata = orgMetadata
         this.urlSafeOrgName = urlSafeOrgName
+        this.orgRoleStructure = orgRoleStructure
 
         this.userAssignedRole = userAssignedRole
         this.userInheritedRolesPlusCurrentRole = userInheritedRolesPlusCurrentRole
         this.userPermissions = userPermissions
+        this.userAssignedAdditionalRoles = userAssignedAdditionalRoles
     }
 
     // validation methods
 
     public isRole(role: string): boolean {
-        return this.userAssignedRole === role
+        if (this.orgRoleStructure === OrgRoleStructure.MultiRole) {
+            return this.userAssignedRole === role || this.userAssignedAdditionalRoles.includes(role)
+        } else {
+            return this.userAssignedRole === role
+        }
     }
 
     public isAtLeastRole(role: string): boolean {
-        return this.userInheritedRolesPlusCurrentRole.includes(role)
+        if (this.orgRoleStructure === OrgRoleStructure.MultiRole) {
+            return this.userAssignedRole === role || this.userAssignedAdditionalRoles.includes(role)
+        } else {
+            return this.userInheritedRolesPlusCurrentRole.includes(role)
+        }
     }
 
     public hasPermission(permission: string): boolean {
@@ -161,7 +231,9 @@ export class OrgMemberInfo {
             obj.urlSafeOrgName,
             obj.userAssignedRole,
             obj.userInheritedRolesPlusCurrentRole,
-            obj.userPermissions
+            obj.userPermissions,
+            obj.orgRoleStructure,
+            obj.userAssignedAdditionalRoles
         )
     }
 
@@ -171,8 +243,20 @@ export class OrgMemberInfo {
         return this.userAssignedRole
     }
 
+    get assignedRoles(): string[] {
+        if (this.orgRoleStructure === OrgRoleStructure.MultiRole) {
+            return this.userAssignedAdditionalRoles.concat(this.userAssignedRole)
+        } else {
+            return [this.userAssignedRole]
+        }
+    }
+
     get inheritedRolesPlusCurrentRole(): string[] {
-        return this.userInheritedRolesPlusCurrentRole
+        if (this.orgRoleStructure === OrgRoleStructure.MultiRole) {
+            return this.userAssignedAdditionalRoles.concat(this.userAssignedRole)
+        } else {
+            return this.userInheritedRolesPlusCurrentRole
+        }
     }
 
     get permissions(): string[] {
@@ -187,12 +271,17 @@ export type InternalOrgMemberInfo = {
     org_name: string
     org_metadata: { [key: string]: any }
     url_safe_org_name: string
+    org_role_structure: OrgRoleStructure
     user_role: string
     inherited_user_roles_plus_current_role: string[]
     user_permissions: string[]
+    additional_roles: string[]
 }
+
 export type InternalUser = {
     user_id: string
+
+    org_member_info?: InternalOrgMemberInfo
     org_id_to_org_member_info?: { [org_id: string]: InternalOrgMemberInfo }
 
     email: string
@@ -201,25 +290,15 @@ export type InternalUser = {
     username?: string
     picture_url?: string
     properties?: { [key: string]: unknown }
+    login_method?: InternalLoginMethod
 
     // If you used our migration APIs to migrate this user from a different system, this is their original ID from that system.
     legacy_user_id?: string
-    impersonatorUserId?: string
+    impersonator_user_id?: string
 }
 
 export function toUser(snake_case: InternalUser): UserFromToken {
-    return new UserFromToken(
-        snake_case.user_id,
-        snake_case.email,
-        toOrgIdToOrgMemberInfo(snake_case.org_id_to_org_member_info),
-        snake_case.first_name,
-        snake_case.last_name,
-        snake_case.username,
-        snake_case.legacy_user_id,
-        snake_case.impersonatorUserId,
-        snake_case.properties,
-        snake_case.picture_url
-    )
+    return UserFromToken.fromJwtPayload(snake_case)
 }
 
 export function toOrgIdToOrgMemberInfo(snake_case?: {
@@ -240,7 +319,9 @@ export function toOrgIdToOrgMemberInfo(snake_case?: {
                 snakeCaseValue.url_safe_org_name,
                 snakeCaseValue.user_role,
                 snakeCaseValue.inherited_user_roles_plus_current_role,
-                snakeCaseValue.user_permissions
+                snakeCaseValue.user_permissions,
+                snakeCaseValue.org_role_structure,
+                snakeCaseValue.additional_roles
             )
         }
     }

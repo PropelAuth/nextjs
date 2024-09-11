@@ -1,34 +1,34 @@
 {
     "name": "@propelauth/nextjs",
-    "version": "0.0.114",
+    "version": "0.1.8",
     "exports": {
         "./server": {
             "browser": "./dist/server/index.mjs",
             "import": "./dist/server/index.mjs",
             "require": "./dist/server/index.js",
-            "default": "./dist/server/index.mjs",
-            "types": "./dist/server/index.d.ts"
+            "types": "./dist/server/index.d.ts",
+            "default": "./dist/server/index.mjs"
         },
         "./server/app-router": {
             "browser": "./dist/server/app-router/index.mjs",
             "import": "./dist/server/app-router/index.mjs",
             "require": "./dist/server/app-router/index.js",
-            "default": "./dist/server/app-router/index.mjs",
-            "types": "./dist/server/app-router/index.d.ts"
+            "types": "./dist/server/app-router/index.d.ts",
+            "default": "./dist/server/app-router/index.mjs"
         },
         "./server/pages": {
             "browser": "./dist/server/pages/index.mjs",
             "import": "./dist/server/pages/index.mjs",
             "require": "./dist/server/pages/index.js",
-            "default": "./dist/server/pages/index.mjs",
-            "types": "./dist/server/pages/index.d.ts"
+            "types": "./dist/server/pages/index.d.ts",
+            "default": "./dist/server/pages/index.mjs"
         },
         "./client": {
             "browser": "./dist/client/index.mjs",
             "import": "./dist/client/index.mjs",
             "require": "./dist/client/index.js",
-            "default": "./dist/client/index.mjs",
-            "types": "./dist/client/index.d.ts"
+            "types": "./dist/client/index.d.ts",
+            "default": "./dist/client/index.mjs"
         },
         "./package.json": "./package.json"
     },
@@ -68,7 +68,7 @@
         "react": "^18.2.0"
     },
     "dependencies": {
-        "@propelauth/node-apis": "^2.1.4",
-        "jose": "^4.14.4"
+        "@propelauth/node-apis": "^2.1.19",
+        "jose": "^5.2.4"
     }
 }
