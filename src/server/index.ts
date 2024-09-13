@@ -57,4 +57,5 @@ export type {
     FetchPendingInvitesParams,
     PendingInvitesPage,
     PendingInvite,
+    RevokePendingOrgInviteRequest,
 } from '@propelauth/node-apis'
