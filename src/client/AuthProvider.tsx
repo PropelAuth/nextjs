@@ -50,6 +50,7 @@ export type AuthProviderProps = {
     authUrl: string
     reloadOnAuthChange?: boolean
     children?: React.ReactNode
+    refreshOnFocus?: boolean
 }
 
 export const AuthContext = React.createContext<InternalAuthState | undefined>(undefined)
@@ -203,7 +204,11 @@ export const AuthProvider = (props: AuthProviderProps) => {
         if (hasWindow()) {
             window.addEventListener('storage', onStorageEvent)
             window.addEventListener('online', refreshToken)
-            window.addEventListener('focus', refreshToken)
+
+            // Default for refreshOnFocus is true
+            if (props.refreshOnFocus !== false) {
+                window.addEventListener('focus', refreshToken)
+            }
         }
 
         return () => {
