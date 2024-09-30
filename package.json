@@ -68,7 +68,7 @@
         "react": "^18.2.0"
     },
     "dependencies": {
-        "@propelauth/node-apis": "^2.1.21",
+        "@propelauth/node-apis": "^2.1.22",
         "jose": "^5.2.4"
     }
 }
