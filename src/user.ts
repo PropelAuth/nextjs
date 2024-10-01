@@ -11,6 +11,7 @@ export class UserFromToken {
     public firstName?: string
     public lastName?: string
     public username?: string
+    public pictureUrl?: string
     public properties?: { [key: string]: unknown }
     public loginMethod?: LoginMethod
 
@@ -29,6 +30,7 @@ export class UserFromToken {
         legacyUserId?: string,
         impersonatorUserId?: string,
         properties?: { [key: string]: unknown },
+        pictureUrl?: string
         activeOrgId?: string,
         loginMethod?: LoginMethod
     ) {
@@ -46,6 +48,7 @@ export class UserFromToken {
         this.impersonatorUserId = impersonatorUserId
 
         this.properties = properties
+        this.pictureUrl = pictureUrl
         this.loginMethod = loginMethod
     }
 
@@ -113,6 +116,7 @@ export class UserFromToken {
             obj.legacyUserId,
             obj.impersonatorUserId,
             obj.properties,
+            obj.pictureUrl,
             obj.activeOrgId,
             obj.loginMethod
         )
@@ -284,6 +288,7 @@ export type InternalUser = {
     first_name?: string
     last_name?: string
     username?: string
+    picture_url?: string
     properties?: { [key: string]: unknown }
     login_method?: InternalLoginMethod
 
