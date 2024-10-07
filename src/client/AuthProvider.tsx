@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useCallback, useEffect, useReducer } from 'react'
-import { doesLocalStorageMatch, hasWindow, isEqual, saveUserToLocalStorage, USER_INFO_KEY } from './utils'
 import { useRouter } from 'next/navigation.js'
-import { User } from './useUser'
+import React, { useCallback, useEffect, useReducer, useState } from 'react'
 import { toOrgIdToOrgMemberInfo } from '../user'
+import { User } from './useUser'
+import { doesLocalStorageMatch, hasWindow, isEqual, saveUserToLocalStorage, USER_INFO_KEY } from './utils'
 
 export interface RedirectToSignupOptions {
     postSignupRedirectPath?: string
@@ -46,9 +46,12 @@ interface InternalAuthState {
     setActiveOrg: (orgId: string) => Promise<User | undefined>
 }
 
+const DEFAULT_MIN_SECONDS_BEFORE_REFRESH = 120
+
 export type AuthProviderProps = {
     authUrl: string
     reloadOnAuthChange?: boolean
+    minSecondsBeforeRefresh?: number
     children?: React.ReactNode
     refreshOnFocus?: boolean
 }
@@ -74,7 +77,7 @@ type AuthState = {
     authChangeDetected: boolean
 }
 
-const initialAuthState = {
+const initialAuthState: AuthState = {
     loading: true,
     userAndAccessToken: {
         user: undefined,
@@ -129,7 +132,9 @@ function authStateReducer(_state: AuthState, action: AuthStateAction): AuthState
 }
 
 export const AuthProvider = (props: AuthProviderProps) => {
+    const minSecondsBeforeRefresh = props.minSecondsBeforeRefresh ?? DEFAULT_MIN_SECONDS_BEFORE_REFRESH
     const [authState, dispatchInner] = useReducer(authStateReducer, initialAuthState)
+    const [lastRefresh, setLastRefresh] = useState<number>()
     const router = useRouter()
     const reloadOnAuthChange = props.reloadOnAuthChange ?? true
 
@@ -185,8 +190,18 @@ export const AuthProvider = (props: AuthProviderProps) => {
             }
             if (!action.error) {
                 dispatch(action)
+                setLastRefresh(Math.floor(Date.now() / 1000))
             } else if (action.error === 'unexpected') {
                 clearAndSetRetryTimer()
+            }
+        }
+
+        // If we were offline or on a different tab, when we return, refetch auth info
+        // Some browsers trigger focus more often than we'd like, so we'll debounce a little here as well
+        const refreshOnOnlineOrFocus = async function () {
+            const currentTimeSecs = Math.floor(Date.now() / 1000)
+            if (lastRefresh && currentTimeSecs > lastRefresh + minSecondsBeforeRefresh) {
+                await refreshToken()
             }
         }
 
@@ -203,11 +218,11 @@ export const AuthProvider = (props: AuthProviderProps) => {
 
         if (hasWindow()) {
             window.addEventListener('storage', onStorageEvent)
-            window.addEventListener('online', refreshToken)
+            window.addEventListener('online', refreshOnOnlineOrFocus)
 
             // Default for refreshOnFocus is true
             if (props.refreshOnFocus !== false) {
-                window.addEventListener('focus', refreshToken)
+                window.addEventListener('focus', refreshOnOnlineOrFocus)
             }
         }
 
@@ -219,11 +234,11 @@ export const AuthProvider = (props: AuthProviderProps) => {
             }
             if (hasWindow()) {
                 window.removeEventListener('storage', onStorageEvent)
-                window.removeEventListener('online', refreshToken)
-                window.removeEventListener('focus', refreshToken)
+                window.removeEventListener('online', refreshOnOnlineOrFocus)
+                window.removeEventListener('focus', refreshOnOnlineOrFocus)
             }
         }
-    }, [dispatch, authState.userAndAccessToken.user])
+    }, [dispatch, authState.userAndAccessToken.user, lastRefresh])
 
     const logout = useCallback(async () => {
         await fetch('/api/auth/logout', {
