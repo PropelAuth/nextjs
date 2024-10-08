@@ -1,11 +1,12 @@
-export { UnauthorizedException, ConfigurationException } from './exceptions'
 export {
+    authMiddleware,
+    getAccessToken,
+    getCurrentPath,
+    getCurrentUrl,
     getRouteHandlers,
     getUser,
+    getUserAndAccessToken,
     getUserOrRedirect,
-    getAccessToken,
-    authMiddleware,
-    getCurrentUrl,
-    getCurrentPath,
 } from './app-router'
-export type { RouteHandlerArgs, RedirectOptions } from './app-router'
+export type { RedirectOptions, RouteHandlerArgs } from './app-router'
+export { ConfigurationException, UnauthorizedException } from './exceptions'
