@@ -4,7 +4,14 @@ import { useRouter } from 'next/navigation.js'
 import React, { useCallback, useEffect, useReducer, useState } from 'react'
 import { toOrgIdToOrgMemberInfo } from '../user'
 import { User } from './useUser'
-import { doesLocalStorageMatch, hasWindow, isEqual, saveUserToLocalStorage, USER_INFO_KEY } from './utils'
+import {
+    currentTimeSecs,
+    doesLocalStorageMatch,
+    hasWindow,
+    isEqual,
+    saveUserToLocalStorage,
+    USER_INFO_KEY,
+} from './utils'
 
 export interface RedirectToSignupOptions {
     postSignupRedirectPath?: string
@@ -162,6 +169,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
             const action = await apiGetUserInfo()
             if (!didCancel && !action.error) {
                 dispatch(action)
+                setLastRefresh(currentTimeSecs())
             }
         }
 
@@ -190,7 +198,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
             }
             if (!action.error) {
                 dispatch(action)
-                setLastRefresh(Math.floor(Date.now() / 1000))
+                setLastRefresh(currentTimeSecs())
             } else if (action.error === 'unexpected') {
                 clearAndSetRetryTimer()
             }
@@ -199,8 +207,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
         // If we were offline or on a different tab, when we return, refetch auth info
         // Some browsers trigger focus more often than we'd like, so we'll debounce a little here as well
         const refreshOnOnlineOrFocus = async function () {
-            const currentTimeSecs = Math.floor(Date.now() / 1000)
-            if (lastRefresh && currentTimeSecs > lastRefresh + minSecondsBeforeRefresh) {
+            if (lastRefresh && currentTimeSecs() > lastRefresh + minSecondsBeforeRefresh) {
                 await refreshToken()
             }
         }
