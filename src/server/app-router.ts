@@ -62,7 +62,7 @@ export type UserAndAccessToken =
           accessToken: string
       }
     | {
-          user: never
+          user: undefined
           accessToken: never
       }
 
@@ -74,7 +74,7 @@ export async function getUserAndAccessToken(): Promise<UserAndAccessToken> {
             return { user, accessToken }
         }
     }
-    return { user: undefined as never, accessToken: undefined as never }
+    return { user: undefined, accessToken: undefined as never }
 }
 
 export function getAccessToken(): string | undefined {
