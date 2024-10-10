@@ -56,13 +56,25 @@ export async function getUser(): Promise<UserFromToken | undefined> {
     return undefined
 }
 
-export async function getUserAndAccessToken(): Promise<{ user?: UserFromToken; accessToken?: string }> {
+export type UserAndAccessToken =
+    | {
+          user: UserFromToken
+          accessToken: string
+      }
+    | {
+          user: never
+          accessToken: never
+      }
+
+export async function getUserAndAccessToken(): Promise<UserAndAccessToken> {
     const accessToken = getAccessToken()
     if (accessToken) {
         const user = await validateAccessTokenOrUndefined(accessToken)
-        return { user, accessToken }
+        if (user) {
+            return { user, accessToken }
+        }
     }
-    return { user: undefined, accessToken }
+    return { user: undefined as never, accessToken: undefined as never }
 }
 
 export function getAccessToken(): string | undefined {
