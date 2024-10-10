@@ -207,7 +207,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
         // If we were offline or on a different tab, when we return, refetch auth info
         // Some browsers trigger focus more often than we'd like, so we'll debounce a little here as well
         const refreshOnOnlineOrFocus = async function () {
-            if (lastRefresh && currentTimeSecs() > lastRefresh + minSecondsBeforeRefresh) {
+            if (!lastRefresh || currentTimeSecs() > lastRefresh + minSecondsBeforeRefresh) {
                 await refreshToken()
             }
         }
