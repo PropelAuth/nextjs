@@ -7,6 +7,10 @@ export function hasWindow(): boolean {
     return typeof window !== 'undefined'
 }
 
+export const currentTimeSecs = (): number => {
+    return Math.floor(Date.now() / 1000)
+}
+
 export function saveUserToLocalStorage(user: User | undefined) {
     if (user) {
         localStorage.setItem(USER_INFO_KEY, JSON.stringify(user))

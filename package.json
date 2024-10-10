@@ -54,7 +54,8 @@
     "scripts": {
         "build": "tsup",
         "dev": "tsup --watch",
-        "test": "jest"
+        "test": "jest",
+        "prepublishOnly": "npm run build"
     },
     "devDependencies": {
         "@types/node": "^20.3.1",

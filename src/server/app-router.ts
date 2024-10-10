@@ -1,6 +1,8 @@
-import { redirect } from 'next/navigation.js'
 import { cookies, headers } from 'next/headers.js'
+import { redirect } from 'next/navigation.js'
 import { NextRequest, NextResponse } from 'next/server.js'
+import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
+import { UserFromToken } from './index'
 import {
     ACCESS_TOKEN_COOKIE_NAME,
     CALLBACK_PATH,
@@ -22,8 +24,6 @@ import {
     validateAccessToken,
     validateAccessTokenOrUndefined,
 } from './shared'
-import { UserFromToken } from './index'
-import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
 
 export type RedirectOptions =
     | {
@@ -54,6 +54,27 @@ export async function getUser(): Promise<UserFromToken | undefined> {
         }
     }
     return undefined
+}
+
+export type UserAndAccessToken =
+    | {
+          user: UserFromToken
+          accessToken: string
+      }
+    | {
+          user: undefined
+          accessToken: never
+      }
+
+export async function getUserAndAccessToken(): Promise<UserAndAccessToken> {
+    const accessToken = getAccessToken()
+    if (accessToken) {
+        const user = await validateAccessTokenOrUndefined(accessToken)
+        if (user) {
+            return { user, accessToken }
+        }
+    }
+    return { user: undefined, accessToken: undefined as never }
 }
 
 export function getAccessToken(): string | undefined {
