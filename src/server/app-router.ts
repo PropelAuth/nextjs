@@ -40,13 +40,13 @@ export async function getUserOrRedirect(redirectOptions?: RedirectOptions): Prom
     if (user) {
         return user
     } else {
-        redirectToLogin(redirectOptions)
+        await redirectToLogin(redirectOptions)
         throw new Error('Redirecting to login')
     }
 }
 
 export async function getUser(): Promise<UserFromToken | undefined> {
-    const accessToken = getAccessToken()
+    const accessToken = await getAccessTokenAsync()
     if (accessToken) {
         const user = await validateAccessTokenOrUndefined(accessToken)
         if (user) {
@@ -58,6 +58,10 @@ export async function getUser(): Promise<UserFromToken | undefined> {
 
 export function getAccessToken(): string | undefined {
     return headers().get(CUSTOM_HEADER_FOR_ACCESS_TOKEN) || cookies().get(ACCESS_TOKEN_COOKIE_NAME)?.value
+}
+
+export async function getAccessTokenAsync(): Promise<string | undefined> {
+    return (await headers()).get(CUSTOM_HEADER_FOR_ACCESS_TOKEN) || (await cookies()).get(ACCESS_TOKEN_COOKIE_NAME)?.value
 }
 
 // Purpose of this middleware is just to keep the access token cookie alive
@@ -595,26 +599,28 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
     }
 
-    function getRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
-        if (params.slug === 'login') {
+    async function getRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
+        const { slug } = await params
+        if (slug === 'login') {
             return loginGetHandler(req)
-        } else if (params.slug === 'signup') {
+        } else if (slug === 'signup') {
             return signupGetHandler(req)
-        } else if (params.slug === 'callback') {
+        } else if (slug === 'callback') {
             return callbackGetHandler(req)
-        } else if (params.slug === 'userinfo') {
+        } else if (slug === 'userinfo') {
             return userinfoGetHandler(req)
-        } else if (params.slug === 'logout') {
+        } else if (slug === 'logout') {
             return logoutGetHandler(req)
         } else {
             return new Response('', { status: 404 })
         }
     }
 
-    function postRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
-        if (params.slug === 'logout') {
+    async function postRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
+        const { slug } = await params
+        if (slug === 'logout') {
             return logoutPostHandler(req)
-        } else if (params.slug === 'set-active-org') {
+        } else if (slug === 'set-active-org') {
             return setActiveOrgHandler(req)
         } else {
             return new Response('', { status: 404 })
@@ -634,14 +640,14 @@ function randomState(): string {
         .join('')
 }
 
-function redirectToLogin(redirectOptions?: RedirectOptions) {
+async function redirectToLogin(redirectOptions?: RedirectOptions) {
     if (!redirectOptions) {
         redirect(LOGIN_PATH)
     } else if (redirectOptions.returnToPath) {
         const loginPath = LOGIN_PATH + '?return_to_path=' + encodeURI(redirectOptions.returnToPath)
         redirect(loginPath)
     } else if (redirectOptions.returnToCurrentPath) {
-        const encodedPath = getUrlEncodedRedirectPathForCurrentPath()
+        const encodedPath = await getUrlEncodedRedirectPathForCurrentPath()
         if (encodedPath) {
             const loginPath = LOGIN_PATH + '?return_to_path=' + encodedPath
             redirect(loginPath)
@@ -652,8 +658,8 @@ function redirectToLogin(redirectOptions?: RedirectOptions) {
     }
 }
 
-export function getUrlEncodedRedirectPathForCurrentPath(): string | undefined {
-    const path = getCurrentPath()
+export async function getUrlEncodedRedirectPathForCurrentPath(): Promise<string | undefined> {
+    const path = await getCurrentPathAsync()
     if (!path) {
         return undefined
     }
@@ -679,6 +685,18 @@ function getCookieForReturnToPathInCallback(returnToPathFromCookie: string | und
 // this functionality
 export function getCurrentPath(): string | undefined {
     const path = headers().get(CUSTOM_HEADER_FOR_PATH)
+    if (!path) {
+        console.warn(
+            'Attempting to redirect to the current path, but we could not find the current path in the headers. Is the middleware set up?'
+        )
+        return undefined
+    } else {
+        return path
+    }
+}
+
+export async function getCurrentPathAsync(): Promise<string | undefined> {
+    const path = (await headers()).get(CUSTOM_HEADER_FOR_PATH)
     if (!path) {
         console.warn(
             'Attempting to redirect to the current path, but we could not find the current path in the headers. Is the middleware set up?'
