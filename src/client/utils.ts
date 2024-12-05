@@ -2,6 +2,10 @@ export function hasWindow(): boolean {
     return typeof window !== 'undefined'
 }
 
+export const currentTimeSecs = (): number => {
+    return Math.floor(Date.now() / 1000)
+}
+
 export function isEqual(a: any, b: any): boolean {
     if (typeof a !== typeof b) {
         return false

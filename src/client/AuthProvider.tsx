@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useReducer } from 'react'
 import { useRouter } from 'next/navigation.js'
-import { hasWindow, isEqual } from './utils'
+import { currentTimeSecs, hasWindow, isEqual } from './utils'
 import { User } from './useUser'
 import { toOrgIdToOrgMemberInfo } from '../user'
 
@@ -46,9 +46,12 @@ interface InternalAuthState {
     setActiveOrg: (orgId: string) => Promise<User | undefined>
 }
 
+const DEFAULT_MIN_SECONDS_BEFORE_REFRESH = 120
+
 export type AuthProviderProps = {
     authUrl: string
     reloadOnAuthChange?: boolean
+    minSecondsBeforeRefresh?: number
     children?: React.ReactNode
     refreshOnFocus?: boolean
 }
@@ -129,9 +132,26 @@ function authStateReducer(_state: AuthState, action: AuthStateAction): AuthState
 }
 
 export const AuthProvider = (props: AuthProviderProps) => {
-    const [authState, dispatch] = useReducer(authStateReducer, initialAuthState)
+    const [authState, dispatchInner] = useReducer(authStateReducer, initialAuthState)
+    const [lastRefresh, setLastRefresh] = React.useState<number>(0)
     const router = useRouter()
     const reloadOnAuthChange = props.reloadOnAuthChange ?? true
+
+    const dispatch = useCallback(
+        (action: AuthStateAction) => {
+            dispatchInner(action)
+            setLastRefresh(currentTimeSecs())
+        },
+        [dispatchInner, setLastRefresh]
+    )
+
+    const shouldRefresh = useCallback(
+        (lastRefresh: number) => {
+            const minSecondsBeforeRefresh = props.minSecondsBeforeRefresh ?? DEFAULT_MIN_SECONDS_BEFORE_REFRESH
+            return currentTimeSecs() - lastRefresh >= minSecondsBeforeRefresh
+        },
+        [props.minSecondsBeforeRefresh]
+    )
 
     // This is because we don't have a good way to trigger server components to reload outside of router.refresh()
     useEffect(() => {
@@ -145,6 +165,10 @@ export const AuthProvider = (props: AuthProviderProps) => {
         let didCancel = false
 
         async function refreshAuthInfo() {
+            if (!shouldRefresh(lastRefresh)) {
+                return
+            }
+
             const action = await apiGetUserInfo()
             if (!didCancel && !action.error) {
                 dispatch(action)
@@ -162,6 +186,10 @@ export const AuthProvider = (props: AuthProviderProps) => {
         let didCancel = false
 
         async function refreshAuthInfo() {
+            if (!shouldRefresh(lastRefresh)) {
+                return
+            }
+
             const action = await apiGetUserInfo()
             if (!didCancel && !action.error) {
                 dispatch(action)
@@ -180,6 +208,10 @@ export const AuthProvider = (props: AuthProviderProps) => {
         let didCancel = false
 
         async function refreshAuthInfo() {
+            if (!shouldRefresh(lastRefresh)) {
+                return
+            }
+
             const action = await apiGetUserInfo()
             if (!didCancel && !action.error) {
                 dispatch(action)
