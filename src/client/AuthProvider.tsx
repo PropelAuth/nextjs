@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useCallback, useEffect, useReducer } from 'react'
-import { doesLocalStorageMatch, hasWindow, isEqual, saveUserToLocalStorage, USER_INFO_KEY } from './utils'
 import { useRouter } from 'next/navigation.js'
+import { hasWindow, isEqual } from './utils'
 import { User } from './useUser'
 import { toOrgIdToOrgMemberInfo } from '../user'
 
@@ -129,20 +129,11 @@ function authStateReducer(_state: AuthState, action: AuthStateAction): AuthState
 }
 
 export const AuthProvider = (props: AuthProviderProps) => {
-    const [authState, dispatchInner] = useReducer(authStateReducer, initialAuthState)
+    const [authState, dispatch] = useReducer(authStateReducer, initialAuthState)
     const router = useRouter()
     const reloadOnAuthChange = props.reloadOnAuthChange ?? true
 
-    const dispatch = useCallback(
-        (action: AuthStateAction) => {
-            dispatchInner(action)
-            saveUserToLocalStorage(action.user)
-        },
-        [dispatchInner]
-    )
-
     // This is because we don't have a good way to trigger server components to reload outside of router.refresh()
-    // Once server actions isn't alpha, we can hopefully use that instead
     useEffect(() => {
         if (reloadOnAuthChange && authState.authChangeDetected) {
             router.refresh()
@@ -169,61 +160,48 @@ export const AuthProvider = (props: AuthProviderProps) => {
     // Periodically refresh the token
     useEffect(() => {
         let didCancel = false
-        let retryTimer: NodeJS.Timeout | undefined = undefined
 
-        function clearAndSetRetryTimer() {
-            if (retryTimer) {
-                clearTimeout(retryTimer)
-            }
-            retryTimer = setTimeout(refreshToken, 30 * 1000)
-        }
-
-        async function refreshToken() {
+        async function refreshAuthInfo() {
             const action = await apiGetUserInfo()
-            if (didCancel) {
-                return
-            }
-            if (!action.error) {
+            if (!didCancel && !action.error) {
                 dispatch(action)
-            } else if (action.error === 'unexpected') {
-                clearAndSetRetryTimer()
             }
         }
 
-        async function onStorageEvent(event: StorageEvent) {
-            if (
-                event.key === USER_INFO_KEY &&
-                !doesLocalStorageMatch(event.newValue, authState.userAndAccessToken.user)
-            ) {
-                await refreshToken()
+        const interval = setInterval(refreshAuthInfo, 5 * 60 * 1000)
+        return () => {
+            didCancel = true
+            clearInterval(interval)
+        }
+    }, [])
+
+    // Set up online and focus event listeners
+    useEffect(() => {
+        let didCancel = false
+
+        async function refreshAuthInfo() {
+            const action = await apiGetUserInfo()
+            if (!didCancel && !action.error) {
+                dispatch(action)
             }
         }
-
-        const interval = setInterval(refreshToken, 5 * 60 * 1000)
 
         if (hasWindow()) {
-            window.addEventListener('storage', onStorageEvent)
-            window.addEventListener('online', refreshToken)
+            window.addEventListener('online', refreshAuthInfo)
 
             // Default for refreshOnFocus is true
             if (props.refreshOnFocus !== false) {
-                window.addEventListener('focus', refreshToken)
+                window.addEventListener('focus', refreshAuthInfo)
             }
         }
 
         return () => {
-            didCancel = true
-            clearInterval(interval)
-            if (retryTimer) {
-                clearTimeout(retryTimer)
-            }
             if (hasWindow()) {
-                window.removeEventListener('storage', onStorageEvent)
-                window.removeEventListener('online', refreshToken)
-                window.removeEventListener('focus', refreshToken)
+                window.removeEventListener('online', refreshAuthInfo)
+                window.removeEventListener('focus', refreshAuthInfo)
             }
         }
-    }, [dispatch, authState.userAndAccessToken.user])
+    }, [props.refreshOnFocus])
 
     const logout = useCallback(async () => {
         await fetch('/api/auth/logout', {
@@ -317,16 +295,6 @@ export const AuthProvider = (props: AuthProviderProps) => {
     const redirectToOrgApiKeysPage = (orgId?: string, opts?: RedirectOptions) =>
         redirectTo(getOrgApiKeysPageUrl(orgId, opts))
 
-    const refreshAuthInfo = useCallback(async () => {
-        const action = await apiGetUserInfo()
-        if (action.error) {
-            throw new Error('Failed to refresh token')
-        } else {
-            dispatch(action)
-            return action.user
-        }
-    }, [dispatch])
-
     const setActiveOrg = useCallback(
         async (orgId: string) => {
             const action = await apiPostSetActiveOrg(orgId)
@@ -339,6 +307,16 @@ export const AuthProvider = (props: AuthProviderProps) => {
         },
         [dispatch]
     )
+
+    const refreshAuthInfo = useCallback(async () => {
+        const action = await apiGetUserInfo()
+        if (action.error) {
+            throw new Error('Failed to refresh token')
+        } else {
+            dispatch(action)
+            return action.user
+        }
+    }, [dispatch])
 
     const value = {
         loading: authState.loading,
