@@ -165,10 +165,6 @@ export const AuthProvider = (props: AuthProviderProps) => {
         let didCancel = false
 
         async function refreshAuthInfo() {
-            if (!shouldRefresh(lastRefresh)) {
-                return
-            }
-
             const action = await apiGetUserInfo()
             if (!didCancel && !action.error) {
                 dispatch(action)
@@ -201,39 +197,37 @@ export const AuthProvider = (props: AuthProviderProps) => {
             didCancel = true
             clearInterval(interval)
         }
-    }, [])
+    }, [lastRefresh])
+
+    const backgroundRefreshAuthInfo = useCallback(async () => {
+        if (!shouldRefresh(lastRefresh)) {
+            return
+        }
+
+        const action = await apiGetUserInfo()
+        if (!action.error) {
+            dispatch(action)
+        }
+    }, [lastRefresh])
 
     // Set up online and focus event listeners
     useEffect(() => {
-        let didCancel = false
-
-        async function refreshAuthInfo() {
-            if (!shouldRefresh(lastRefresh)) {
-                return
-            }
-
-            const action = await apiGetUserInfo()
-            if (!didCancel && !action.error) {
-                dispatch(action)
-            }
-        }
-
         if (hasWindow()) {
-            window.addEventListener('online', refreshAuthInfo)
+            window.addEventListener('online', backgroundRefreshAuthInfo)
 
             // Default for refreshOnFocus is true
             if (props.refreshOnFocus !== false) {
-                window.addEventListener('focus', refreshAuthInfo)
+                window.addEventListener('focus', backgroundRefreshAuthInfo)
             }
         }
 
         return () => {
             if (hasWindow()) {
-                window.removeEventListener('online', refreshAuthInfo)
-                window.removeEventListener('focus', refreshAuthInfo)
+                window.removeEventListener('online', backgroundRefreshAuthInfo)
+                window.removeEventListener('focus', backgroundRefreshAuthInfo)
             }
         }
-    }, [props.refreshOnFocus])
+    }, [props.refreshOnFocus, backgroundRefreshAuthInfo])
 
     const logout = useCallback(async () => {
         await fetch('/api/auth/logout', {
