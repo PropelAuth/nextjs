@@ -61,7 +61,9 @@ export function getAccessToken(): string | undefined {
 }
 
 export async function getAccessTokenAsync(): Promise<string | undefined> {
-    return (await headers()).get(CUSTOM_HEADER_FOR_ACCESS_TOKEN) || (await cookies()).get(ACCESS_TOKEN_COOKIE_NAME)?.value
+    return (
+        (await headers()).get(CUSTOM_HEADER_FOR_ACCESS_TOKEN) || (await cookies()).get(ACCESS_TOKEN_COOKIE_NAME)?.value
+    )
 }
 
 // Purpose of this middleware is just to keep the access token cookie alive
@@ -627,9 +629,21 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
     }
 
+    async function getRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+        const awaitedParams = await params
+        return getRouteHandler(req, { params: awaitedParams })
+    }
+
+    async function postRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+        const awaitedParams = await params
+        return postRouteHandler(req, { params: awaitedParams })
+    }
+
     return {
         getRouteHandler,
         postRouteHandler,
+        getRouteHandlerAsync,
+        postRouteHandlerAsync,
     }
 }
 
