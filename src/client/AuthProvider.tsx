@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useReducer } from 'react'
-import { useRouter } from 'next/navigation.js'
+import { useRouter } from 'next/navigation'
 import { currentTimeSecs, hasWindow, isEqual } from './utils'
 import { User } from './useUser'
 import { toOrgIdToOrgMemberInfo } from '../user'

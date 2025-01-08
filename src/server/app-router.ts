@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation.js'
-import { cookies, headers } from 'next/headers.js'
-import { NextRequest, NextResponse } from 'next/server.js'
+import { redirect } from 'next/navigation'
+import { cookies, headers } from 'next/headers'
+import { NextRequest, NextResponse } from 'next/server'
 import {
     ACCESS_TOKEN_COOKIE_NAME,
     CALLBACK_PATH,
