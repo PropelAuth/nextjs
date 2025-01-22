@@ -17,6 +17,7 @@ export type {
     ApiKeyUpdateException,
     ApiKeyUpdateRequest,
     ApiKeyValidateException,
+    ApiKeyValidateRateLimitedException,
     ApiKeyValidation,
     ApiKeysCreateRequest,
     ApiKeysQueryRequest,
