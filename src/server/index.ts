@@ -3,6 +3,8 @@ export type { OrgIdToOrgMemberInfo } from '../user'
 export { UserFromToken, OrgMemberInfo } from '../user'
 export { UnauthorizedException, ConfigurationException } from './exceptions'
 export { getPropelAuthApis } from './api'
+export { AuthHookResponse } from './middleware/auth-hook-response'
+export type { PropelAuthMiddlewareOptions } from './middleware/advanced-middleware'
 export type {
     AccessToken,
     AccessTokenCreationException,
