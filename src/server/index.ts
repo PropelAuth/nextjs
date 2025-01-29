@@ -57,6 +57,7 @@ export type {
     UserNotFoundException,
     UsersInOrgQuery,
     UsersPagedResponse,
+    UsersInOrgPagedResponse,
     UsersQuery,
     FetchPendingInvitesParams,
     PendingInvitesPage,
