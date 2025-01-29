@@ -24,6 +24,7 @@ import {
 } from './shared'
 import { UserFromToken } from './index'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
+import { buildAuthMiddleware } from './middleware/advanced-middleware'
 
 export type RedirectOptions =
     | {
@@ -66,58 +67,11 @@ export async function getAccessTokenAsync(): Promise<string | undefined> {
     )
 }
 
-// Purpose of this middleware is just to keep the access token cookie alive
-// In an ideal world, this could be done in `getUser`, however, you can't
-//   set a cookie in a server component.
-// There also doesn't seem to be any way right now to set a cookie in a
-//   middleware and pass it forward (you can only set them on the response).
-// You CAN, however, pass in custom headers,
-//   so we'll use CUSTOM_HEADER_FOR_ACCESS_TOKEN as a workaround
 export async function authMiddleware(req: NextRequest): Promise<Response> {
-    if (
-        req.nextUrl.pathname === CALLBACK_PATH ||
-        req.nextUrl.pathname === LOGOUT_PATH ||
-        req.nextUrl.pathname === USERINFO_PATH
-    ) {
-        // Don't do anything for the callback, logout, or userinfo paths, as they will modify the cookies themselves
-        return getNextResponse(req)
-    }
-
-    const accessToken = req.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value
-    const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
-    const activeOrgId = req.cookies.get(ACTIVE_ORG_ID_COOKIE_NAME)?.value
-
-    // If we are authenticated, we can continue
-    if (accessToken) {
-        const user = await validateAccessTokenOrUndefined(accessToken)
-        if (user) {
-            return getNextResponse(req)
-        }
-    }
-
-    // Otherwise, we need to refresh the access token
-    if (refreshToken) {
-        const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
-        if (response.error === 'unexpected') {
-            throw new Error('Unexpected error while refreshing access token')
-        } else if (response.error === 'unauthorized') {
-            const response = getNextResponse(req)
-            response.cookies.delete(ACCESS_TOKEN_COOKIE_NAME)
-            response.cookies.delete(REFRESH_TOKEN_COOKIE_NAME)
-            return response
-        } else {
-            const sameSite = getSameSiteCookieValue()
-            const nextResponse = getNextResponse(req, response.accessToken)
-            nextResponse.cookies.set(ACCESS_TOKEN_COOKIE_NAME, response.accessToken, { ...COOKIE_OPTIONS, sameSite })
-            nextResponse.cookies.set(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken, { ...COOKIE_OPTIONS, sameSite })
-            return nextResponse
-        }
-    }
-
-    return getNextResponse(req)
+    return buildAuthMiddleware()(req)
 }
 
-function getNextResponse(request: NextRequest, newAccessToken?: string) {
+export function getNextResponse(request: NextRequest, newAccessToken?: string) {
     const headers = new Headers(request.headers)
     headers.set(CUSTOM_HEADER_FOR_URL, request.nextUrl.toString())
     headers.set(CUSTOM_HEADER_FOR_PATH, request.nextUrl.pathname + request.nextUrl.search)
