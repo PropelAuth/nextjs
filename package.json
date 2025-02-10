@@ -1,6 +1,6 @@
 {
     "name": "@propelauth/nextjs",
-    "version": "0.3.3",
+    "version": "0.3.4",
     "exports": {
         "./server": {
             "browser": "./dist/server/index.mjs",
@@ -68,7 +68,7 @@
         "react": "^18.2.0 || ^19.0.0"
     },
     "dependencies": {
-        "@propelauth/node-apis": "^2.1.27",
+        "@propelauth/node-apis": "^2.1.28",
         "jose": "^5.2.4"
     }
 }
