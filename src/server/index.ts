@@ -55,6 +55,7 @@ export type {
     UpdateUserPasswordException,
     UpdateUserPasswordRequest,
     UserNotFoundException,
+    UserInOrgMetadata,
     UsersInOrgQuery,
     UsersPagedResponse,
     UsersInOrgPagedResponse,
