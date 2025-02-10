@@ -105,11 +105,10 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         const redirectUri = getRedirectUri()
         const sameSite = getSameSiteCookieValue()
 
-        const authorizeUrlSearchParams = new URLSearchParams({
-            redirect_uri: redirectUri,
-            state,
-            signup: isSignup ? 'true' : 'false',
-        })
+        const authorizeUrlSearchParams = req.nextUrl.searchParams
+        authorizeUrlSearchParams.set('redirect_uri', redirectUri)
+        authorizeUrlSearchParams.set('state', state)
+        authorizeUrlSearchParams.set('signup', isSignup ? 'true' : 'false')
         const authorize_url = getAuthUrlOrigin() + '/propelauth/ssr/authorize?' + authorizeUrlSearchParams.toString()
 
         const headers = new Headers()
