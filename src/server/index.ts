@@ -42,6 +42,7 @@ export type {
     OrgQuery,
     OrgQueryResponse,
     PersonalApiKeyValidation,
+    RateLimitedException,
     RemoveUserFromOrgException,
     RemoveUserFromOrgRequest,
     TokenVerificationMetadata,
