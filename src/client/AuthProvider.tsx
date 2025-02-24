@@ -241,18 +241,42 @@ export const AuthProvider = (props: AuthProviderProps) => {
     }, [dispatch])
 
     const getLoginPageUrl = (opts?: RedirectToLoginOptions) => {
-        if (opts?.postLoginRedirectPath) {
-            return `/api/auth/login?return_to_path=${encodeURIComponent(opts.postLoginRedirectPath)}`
+        let qs = new URLSearchParams()
+        let url = '/api/auth/login'
+        if (opts) {
+            const { postLoginRedirectPath, userSignupQueryParameters } = opts
+            if (userSignupQueryParameters) {
+                Object.entries(userSignupQueryParameters).forEach(([key, value]) => {
+                    qs.set(key, value)
+                })
+            }
+            if (postLoginRedirectPath) {
+                qs.set("return_to_path", postLoginRedirectPath)
+            }
         }
-
-        return '/api/auth/login'
+        if (qs.toString()) {
+            url += `?${qs.toString()}`
+        }
+        return url
     }
     const getSignupPageUrl = (opts?: RedirectToSignupOptions) => {
-        if (opts?.postSignupRedirectPath) {
-            return `/api/auth/signup?return_to_path=${encodeURIComponent(opts.postSignupRedirectPath)}`
+        let qs = new URLSearchParams()
+        let url = '/api/auth/signup'
+        if (opts) {
+            const { postSignupRedirectPath, userSignupQueryParameters } = opts
+            if (userSignupQueryParameters) {
+                Object.entries(userSignupQueryParameters).forEach(([key, value]) => {
+                    qs.set(key, value)
+                })
+            }
+            if (postSignupRedirectPath) {
+                qs.set("return_to_path", postSignupRedirectPath)
+            }
         }
-
-        return '/api/auth/signup'
+        if (qs.toString()) {
+            url += `?${qs.toString()}`
+        }
+        return url
     }
     const getAccountPageUrl = useCallback(
         (opts?: RedirectOptions) => {
