@@ -240,19 +240,33 @@ export const AuthProvider = (props: AuthProviderProps) => {
         dispatch({ user: undefined, accessToken: undefined })
     }, [dispatch])
 
-    const getLoginPageUrl = (opts?: RedirectToLoginOptions) => {
-        if (opts?.postLoginRedirectPath) {
-            return `/api/auth/login?return_to_path=${encodeURIComponent(opts.postLoginRedirectPath)}`
+    const buildAuthPageUrl = (basePath: string, redirectPath?: string, queryParams?: Record<string, string>) => {
+        let qs = new URLSearchParams()
+        let url = basePath
+
+        if (queryParams) {
+            Object.entries(queryParams).forEach(([key, value]) => {
+                qs.set(key, value)
+            })
         }
 
-        return '/api/auth/login'
+        if (redirectPath) {
+            qs.set('return_to_path', redirectPath)
+        }
+
+        if (qs.toString()) {
+            url += `?${qs.toString()}`
+        }
+
+        return url
     }
-    const getSignupPageUrl = (opts?: RedirectToSignupOptions) => {
-        if (opts?.postSignupRedirectPath) {
-            return `/api/auth/signup?return_to_path=${encodeURIComponent(opts.postSignupRedirectPath)}`
-        }
 
-        return '/api/auth/signup'
+    const getLoginPageUrl = (opts?: RedirectToLoginOptions) => {
+        return buildAuthPageUrl('/api/auth/login', opts?.postLoginRedirectPath, opts?.userSignupQueryParameters)
+    }
+
+    const getSignupPageUrl = (opts?: RedirectToSignupOptions) => {
+        return buildAuthPageUrl('/api/auth/signup', opts?.postSignupRedirectPath, opts?.userSignupQueryParameters)
     }
     const getAccountPageUrl = useCallback(
         (opts?: RedirectOptions) => {
