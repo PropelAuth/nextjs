@@ -240,43 +240,33 @@ export const AuthProvider = (props: AuthProviderProps) => {
         dispatch({ user: undefined, accessToken: undefined })
     }, [dispatch])
 
-    const getLoginPageUrl = (opts?: RedirectToLoginOptions) => {
+    const buildAuthPageUrl = (basePath: string, redirectPath?: string, queryParams?: Record<string, string>) => {
         let qs = new URLSearchParams()
-        let url = '/api/auth/login'
-        if (opts) {
-            const { postLoginRedirectPath, userSignupQueryParameters } = opts
-            if (userSignupQueryParameters) {
-                Object.entries(userSignupQueryParameters).forEach(([key, value]) => {
-                    qs.set(key, value)
-                })
-            }
-            if (postLoginRedirectPath) {
-                qs.set("return_to_path", postLoginRedirectPath)
-            }
+        let url = basePath
+
+        if (queryParams) {
+            Object.entries(queryParams).forEach(([key, value]) => {
+                qs.set(key, value)
+            })
         }
+
+        if (redirectPath) {
+            qs.set('return_to_path', redirectPath)
+        }
+
         if (qs.toString()) {
             url += `?${qs.toString()}`
         }
+
         return url
     }
+
+    const getLoginPageUrl = (opts?: RedirectToLoginOptions) => {
+        return buildAuthPageUrl('/api/auth/login', opts?.postLoginRedirectPath, opts?.userSignupQueryParameters)
+    }
+
     const getSignupPageUrl = (opts?: RedirectToSignupOptions) => {
-        let qs = new URLSearchParams()
-        let url = '/api/auth/signup'
-        if (opts) {
-            const { postSignupRedirectPath, userSignupQueryParameters } = opts
-            if (userSignupQueryParameters) {
-                Object.entries(userSignupQueryParameters).forEach(([key, value]) => {
-                    qs.set(key, value)
-                })
-            }
-            if (postSignupRedirectPath) {
-                qs.set("return_to_path", postSignupRedirectPath)
-            }
-        }
-        if (qs.toString()) {
-            url += `?${qs.toString()}`
-        }
-        return url
+        return buildAuthPageUrl('/api/auth/signup', opts?.postSignupRedirectPath, opts?.userSignupQueryParameters)
     }
     const getAccountPageUrl = useCallback(
         (opts?: RedirectOptions) => {
