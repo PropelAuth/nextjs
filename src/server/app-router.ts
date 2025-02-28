@@ -246,8 +246,10 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 headers,
             })
         } else if (response.status === 401) {
+            const apiKey = getIntegrationApiKey()
+            const firstFourChars = apiKey.substring(0, 4)
             console.error(
-                "Couldn't finish the login process for this user. This is most likely caused by an incorrect PROPELAUTH_API_KEY."
+                `Couldn't finish the login process for this user. This is most likely caused by an incorrect PROPELAUTH_API_KEY. Your API key starts with ${firstFourChars}... double check that that matches the API key in the PropelAuth dashboard for this environment.`
             )
             return new Response('Unexpected error', { status: 500 })
         } else {
