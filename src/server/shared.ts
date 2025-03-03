@@ -45,7 +45,7 @@ export function getAuthUrlOrigin() {
 }
 
 export function getAuthUrl() {
-    const authUrl = process.env.NEXT_PUBLIC_AUTH_URL
+    const authUrl = process.env.PROPELAUTH_AUTH_URL || process.env.NEXT_PUBLIC_AUTH_URL
     if (!authUrl) {
         throw new Error('NEXT_PUBLIC_AUTH_URL is not set')
     }
