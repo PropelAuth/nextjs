@@ -32,8 +32,7 @@ When you copy the PROPELAUTH_VERIFIER_KEY from the PropelAuth dashboard, it will
 PROPELAUTH_VERIFIER_KEY=-----BEGIN PUBLIC KEY-----\nMIIBIjANBgk...
 ```
 
-For most applications, setting `NEXT_PUBLIC_AUTH_URL` during build time is sufficient. However, in case auth URL is needed to be set at runtime, you can use `PROPELAUTH_AUTH_URL`.
-Auth url will be fetched from `PROPELAUTH_AUTH_URL` if present and fall back to `NEXT_PUBLIC_AUTH_URL` if not.
+If authentication URL needs to be set at runtime, use `PROPELAUTH_AUTH_URL`. Otherwise, it falls back to `NEXT_PUBLIC_AUTH_URL`, which is set at build time.
 
 For the PROPELAUTH_REDIRECT_URI variable, you need to add /api/auth/callback to the end of one of your allowed frontend locations. So, for example, if you are developing in the test environment and using http://localhost:3000, you would use http://localhost:3000/api/auth/callback 
 
