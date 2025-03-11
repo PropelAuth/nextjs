@@ -1,10 +1,6 @@
-import { redirect } from 'next/navigation'
-import { cookies, headers } from 'next/headers'
-import { NextRequest, NextResponse } from 'next/server'
+import { redirect, cookies, headers, TNextRequest, NextResponse } from './app-router-imports'
 import {
     ACCESS_TOKEN_COOKIE_NAME,
-    CALLBACK_PATH,
-    COOKIE_OPTIONS,
     CUSTOM_HEADER_FOR_ACCESS_TOKEN,
     CUSTOM_HEADER_FOR_PATH,
     CUSTOM_HEADER_FOR_URL,
@@ -13,12 +9,10 @@ import {
     getRedirectUri,
     getSameSiteCookieValue,
     LOGIN_PATH,
-    LOGOUT_PATH,
     REFRESH_TOKEN_COOKIE_NAME,
     refreshTokenWithAccessAndRefreshToken,
     RETURN_TO_PATH_COOKIE_NAME,
     STATE_COOKIE_NAME,
-    USERINFO_PATH,
     validateAccessToken,
     validateAccessTokenOrUndefined,
 } from './shared'
@@ -67,11 +61,11 @@ export async function getAccessTokenAsync(): Promise<string | undefined> {
     )
 }
 
-export async function authMiddleware(req: NextRequest): Promise<Response> {
+export async function authMiddleware(req: TNextRequest): Promise<Response> {
     return buildAuthMiddleware()(req)
 }
 
-export function getNextResponse(request: NextRequest, newAccessToken?: string) {
+export function getNextResponse(request: TNextRequest, newAccessToken?: string) {
     const headers = new Headers(request.headers)
     headers.set(CUSTOM_HEADER_FOR_URL, request.nextUrl.toString())
     headers.set(CUSTOM_HEADER_FOR_PATH, request.nextUrl.pathname + request.nextUrl.search)
@@ -86,20 +80,20 @@ export function getNextResponse(request: NextRequest, newAccessToken?: string) {
 }
 
 export type RouteHandlerArgs = {
-    postLoginRedirectPathFn?: (req: NextRequest) => string
-    getDefaultActiveOrgId?: (req: NextRequest, user: UserFromToken) => string | undefined
+    postLoginRedirectPathFn?: (req: TNextRequest) => string
+    getDefaultActiveOrgId?: (req: TNextRequest, user: UserFromToken) => string | undefined
 }
 
 export function getRouteHandlers(args?: RouteHandlerArgs) {
-    function loginGetHandler(req: NextRequest) {
+    function loginGetHandler(req: TNextRequest) {
         return signupOrLoginHandler(req, false)
     }
 
-    function signupGetHandler(req: NextRequest) {
+    function signupGetHandler(req: TNextRequest) {
         return signupOrLoginHandler(req, true)
     }
 
-    function signupOrLoginHandler(req: NextRequest, isSignup: boolean) {
+    function signupOrLoginHandler(req: TNextRequest, isSignup: boolean) {
         const returnToPath = req.nextUrl.searchParams.get('return_to_path')
         const state = randomState()
         const redirectUri = getRedirectUri()
@@ -131,7 +125,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         })
     }
 
-    async function callbackGetHandler(req: NextRequest) {
+    async function callbackGetHandler(req: TNextRequest) {
         const sameSite = getSameSiteCookieValue()
         const oauthState = req.cookies.get(STATE_COOKIE_NAME)?.value
         if (!oauthState || oauthState.length !== 64) {
@@ -257,7 +251,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
     }
 
-    async function userinfoGetHandler(req: NextRequest) {
+    async function userinfoGetHandler(req: TNextRequest) {
         const oldRefreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
         const activeOrgId = req.cookies.get(ACTIVE_ORG_ID_COOKIE_NAME)?.value
         const sameSite = getSameSiteCookieValue()
@@ -358,7 +352,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         return new Response(null, { status: 401 })
     }
 
-    async function logoutGetHandler(req: NextRequest) {
+    async function logoutGetHandler(req: TNextRequest) {
         // Real logout requests will go to the logout POST handler
         // This endpoint is a landing page for when people logout from the hosted UIs
         // Instead of doing a logout we'll check the refresh token.
@@ -426,7 +420,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
     }
 
-    async function logoutPostHandler(req: NextRequest) {
+    async function logoutPostHandler(req: TNextRequest) {
         const sameSite = getSameSiteCookieValue()
         const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
         if (!refreshToken) {
@@ -482,7 +476,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         return new Response(null, { status: 200, headers })
     }
 
-    async function setActiveOrgHandler(req: NextRequest) {
+    async function setActiveOrgHandler(req: TNextRequest) {
         const oldRefreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
         const activeOrgId = req.nextUrl.searchParams.get('active_org_id')
         const sameSite = getSameSiteCookieValue()
@@ -556,7 +550,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
     }
 
-    async function getRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
+    async function getRouteHandler(req: TNextRequest, { params }: { params: { slug: string } }) {
         const { slug } = await params
         if (slug === 'login') {
             return loginGetHandler(req)
@@ -573,7 +567,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
     }
 
-    async function postRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
+    async function postRouteHandler(req: TNextRequest, { params }: { params: { slug: string } }) {
         const { slug } = await params
         if (slug === 'logout') {
             return logoutPostHandler(req)
@@ -584,12 +578,12 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
     }
 
-    async function getRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+    async function getRouteHandlerAsync(req: TNextRequest, { params }: { params: Promise<{ slug: string }> }) {
         const awaitedParams = await params
         return getRouteHandler(req, { params: awaitedParams })
     }
 
-    async function postRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+    async function postRouteHandlerAsync(req: TNextRequest, { params }: { params: Promise<{ slug: string }> }) {
         const awaitedParams = await params
         return postRouteHandler(req, { params: awaitedParams })
     }
