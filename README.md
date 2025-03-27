@@ -24,7 +24,7 @@ If you would prefer a manual installation process instead of an automatic one, c
 Begin by installing the PropelAuth CLI:
 
 ```bash
-npm install @propelauth/nextjs
+npm i -g @propelauth/cli
 ```
 
 ## Logging into the PropelAuth CLI
