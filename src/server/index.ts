@@ -36,6 +36,8 @@ export type {
     MagicLinkCreationException,
     MigrateUserException,
     MigrateUserFromExternalSourceRequest,
+    MigrateUserPasswordException,
+    MigrateUserPasswordRequest,
     Org,
     Organization,
     OrgApiKeyValidation,
