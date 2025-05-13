@@ -428,6 +428,7 @@ async function apiGetUserInfo(): Promise<UserInfoResponse> {
                 createdAt: userinfo.created_at,
                 lastActiveAt: userinfo.last_active_at,
                 properties: userinfo.properties,
+                legacyUserId: userinfo.legacy_user_id,
                 impersonatorUserId,
             })
 
