@@ -556,29 +556,85 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
     }
 
+    async function frontendApisRouteHandler(req: NextRequest, slug?: string) {
+        const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
+        if (!refreshToken || !slug) {
+            return new Response(null, { status: 401 })
+        }
+
+        const authUrlOrigin = getAuthUrlOrigin()
+        const integrationApiKey = getIntegrationApiKey()
+        const url = `${authUrlOrigin}/api/fe/v3/${slug}`
+
+        const request: RequestInit = {
+            method: req.method,
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer ' + integrationApiKey,
+                'X-CSRF-Token': '-.-',
+                cookie: `refresh_token=${refreshToken}`,
+            },
+        }
+
+        if (req.body) {
+            request.body = JSON.stringify(req.body)
+        }
+
+        const response = await fetch(url, request)
+
+        if (response.ok) {
+            const data = await response.json()
+            return new Response(JSON.stringify(data), { status: 200 })
+        } else {
+            return new Response(null, { status: response.status })
+        }
+    }
+
     async function getRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
-        const { slug } = await params
-        if (slug === 'login') {
+        const { slug } = params
+        const slugArray = typeof slug === 'string' ? [slug] : [...slug]
+
+        if (slugArray[0] === 'login') {
             return loginGetHandler(req)
-        } else if (slug === 'signup') {
+        } else if (slugArray[0] === 'signup') {
             return signupGetHandler(req)
-        } else if (slug === 'callback') {
+        } else if (slugArray[0] === 'callback') {
             return callbackGetHandler(req)
-        } else if (slug === 'userinfo') {
+        } else if (slugArray[0] === 'userinfo') {
             return userinfoGetHandler(req)
-        } else if (slug === 'logout') {
+        } else if (slugArray[0] === 'logout') {
             return logoutGetHandler(req)
+        } else if (slugArray[0] === 'fe') {
+            const path = slugArray.slice(1).join('/')
+            return frontendApisRouteHandler(req, path)
         } else {
             return new Response('', { status: 404 })
         }
     }
 
     async function postRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
-        const { slug } = await params
-        if (slug === 'logout') {
+        const { slug } = params
+        const slugArray = typeof slug === 'string' ? [slug] : [...slug]
+
+        if (slugArray[0] === 'logout') {
             return logoutPostHandler(req)
-        } else if (slug === 'set-active-org') {
+        } else if (slugArray[0] === 'set-active-org') {
             return setActiveOrgHandler(req)
+        } else if (slugArray[0] === 'fe') {
+            const path = slugArray.slice(1).join('/')
+            return frontendApisRouteHandler(req, path)
+        } else {
+            return new Response('', { status: 404 })
+        }
+    }
+
+    async function deleteRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
+        const { slug } = params
+        const slugArray = typeof slug === 'string' ? [slug] : [...slug]
+
+        if (slugArray[0] === 'fe') {
+            const path = slugArray.slice(1).join('/')
+            return frontendApisRouteHandler(req, path)
         } else {
             return new Response('', { status: 404 })
         }
@@ -594,11 +650,18 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         return postRouteHandler(req, { params: awaitedParams })
     }
 
+    async function deleteRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+        const awaitedParams = await params
+        return deleteRouteHandler(req, { params: awaitedParams })
+    }
+
     return {
         getRouteHandler,
         postRouteHandler,
+        deleteRouteHandler,
         getRouteHandlerAsync,
         postRouteHandlerAsync,
+        deleteRouteHandlerAsync,
     }
 }
 
