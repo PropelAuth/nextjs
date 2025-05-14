@@ -558,20 +558,21 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
     async function frontendApisRouteHandler(req: NextRequest, slug?: string) {
         const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
-        if (!refreshToken || !slug) {
-            return new Response(null, { status: 401 })
-        }
 
         const authUrlOrigin = getAuthUrlOrigin()
-        const integrationApiKey = getIntegrationApiKey()
         const url = `${authUrlOrigin}/api/fe/v3/${slug}`
+        const xCsrfToken = req.headers.get('X-CSRF-Token')
+        const contentType = req.headers.get('Content-Type')
+
+        if (!refreshToken || !slug || !xCsrfToken || !contentType) {
+            return new Response(null, { status: 401 })
+        }
 
         const request: RequestInit = {
             method: req.method,
             headers: {
-                'Content-Type': 'application/json',
-                Authorization: 'Bearer ' + integrationApiKey,
-                'X-CSRF-Token': '-.-',
+                'Content-Type': contentType,
+                'X-CSRF-Token': xCsrfToken,
                 cookie: `refresh_token=${refreshToken}`,
             },
         }
@@ -591,53 +592,43 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
     }
 
     async function getRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
-        const { slug } = params
-        const slugArray = typeof slug === 'string' ? [slug] : [...slug]
+        const { slug } = await params
 
-        if (slugArray[0] === 'login') {
+        if (slug === 'login') {
             return loginGetHandler(req)
-        } else if (slugArray[0] === 'signup') {
+        } else if (slug === 'signup') {
             return signupGetHandler(req)
-        } else if (slugArray[0] === 'callback') {
+        } else if (slug === 'callback') {
             return callbackGetHandler(req)
-        } else if (slugArray[0] === 'userinfo') {
+        } else if (slug === 'userinfo') {
             return userinfoGetHandler(req)
-        } else if (slugArray[0] === 'logout') {
+        } else if (slug === 'logout') {
             return logoutGetHandler(req)
-        } else if (slugArray[0] === 'fe') {
-            const path = slugArray.slice(1).join('/')
-            return frontendApisRouteHandler(req, path)
         } else {
             return new Response('', { status: 404 })
         }
     }
 
     async function postRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
-        const { slug } = params
-        const slugArray = typeof slug === 'string' ? [slug] : [...slug]
+        const { slug } = await params
 
-        if (slugArray[0] === 'logout') {
+        if (slug === 'logout') {
             return logoutPostHandler(req)
-        } else if (slugArray[0] === 'set-active-org') {
+        } else if (slug === 'set-active-org') {
             return setActiveOrgHandler(req)
-        } else if (slugArray[0] === 'fe') {
-            const path = slugArray.slice(1).join('/')
-            return frontendApisRouteHandler(req, path)
         } else {
             return new Response('', { status: 404 })
         }
     }
 
-    async function deleteRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
-        const { slug } = params
-        const slugArray = typeof slug === 'string' ? [slug] : [...slug]
-
-        if (slugArray[0] === 'fe') {
-            const path = slugArray.slice(1).join('/')
-            return frontendApisRouteHandler(req, path)
-        } else {
+    async function feRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
+        const { slug } = await params
+        if (!Array.isArray(slug)) {
             return new Response('', { status: 404 })
         }
+
+        const path = slug.join('/')
+        return frontendApisRouteHandler(req, path)
     }
 
     async function getRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -650,18 +641,18 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         return postRouteHandler(req, { params: awaitedParams })
     }
 
-    async function deleteRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+    async function feRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
         const awaitedParams = await params
-        return deleteRouteHandler(req, { params: awaitedParams })
+        return feRouteHandler(req, { params: awaitedParams })
     }
 
     return {
         getRouteHandler,
         postRouteHandler,
-        deleteRouteHandler,
         getRouteHandlerAsync,
         postRouteHandlerAsync,
-        deleteRouteHandlerAsync,
+        feRouteHandler,
+        feRouteHandlerAsync,
     }
 }
 
