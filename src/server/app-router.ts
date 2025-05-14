@@ -583,11 +583,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
         const response = await fetch(url, request)
 
-        if (response.ok) {
-            return new Response(response.body, { status: response.status })
-        } else {
-            return new Response(null, { status: response.status })
-        }
+        return response
     }
 
     async function getRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
