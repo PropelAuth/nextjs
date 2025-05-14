@@ -619,7 +619,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
     async function feRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
         const { slug } = await params
         if (!Array.isArray(slug)) {
-            return new Response('', { status: 404 })
+            return new Response('api/auth/fe/[...slug] directory incorrectly configured', { status: 404 })
         }
 
         const path = slug.join('/')
