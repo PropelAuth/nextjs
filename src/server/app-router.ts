@@ -585,7 +585,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
         if (response.ok) {
             const data = await response.json()
-            return new Response(JSON.stringify(data), { status: 200 })
+            return new Response(data ? JSON.stringify(data) : null, { status: response.status })
         } else {
             return new Response(null, { status: response.status })
         }
