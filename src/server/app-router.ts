@@ -556,8 +556,39 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
     }
 
+    async function frontendApisRouteHandler(req: NextRequest, slug?: string) {
+        const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
+
+        const authUrlOrigin = getAuthUrlOrigin()
+        const url = `${authUrlOrigin}/api/fe/v3/${slug}`
+        const xCsrfToken = req.headers.get('X-CSRF-Token')
+        const contentType = req.headers.get('Content-Type')
+
+        if (!refreshToken || !slug || !xCsrfToken || !contentType) {
+            return new Response(null, { status: 401 })
+        }
+
+        const request: RequestInit = {
+            method: req.method,
+            headers: {
+                'Content-Type': contentType,
+                'X-CSRF-Token': xCsrfToken,
+                cookie: `refresh_token=${refreshToken}`,
+            },
+        }
+
+        if (req.body) {
+            request.body = JSON.stringify(req.body)
+        }
+
+        const response = await fetch(url, request)
+
+        return response
+    }
+
     async function getRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
         const { slug } = await params
+
         if (slug === 'login') {
             return loginGetHandler(req)
         } else if (slug === 'signup') {
@@ -575,6 +606,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
     async function postRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
         const { slug } = await params
+
         if (slug === 'logout') {
             return logoutPostHandler(req)
         } else if (slug === 'set-active-org') {
@@ -582,6 +614,16 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         } else {
             return new Response('', { status: 404 })
         }
+    }
+
+    async function feRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
+        const { slug } = await params
+        if (!Array.isArray(slug)) {
+            return new Response('api/auth/fe/[...slug] directory incorrectly configured', { status: 404 })
+        }
+
+        const path = slug.join('/')
+        return frontendApisRouteHandler(req, path)
     }
 
     async function getRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -594,11 +636,18 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         return postRouteHandler(req, { params: awaitedParams })
     }
 
+    async function feRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+        const awaitedParams = await params
+        return feRouteHandler(req, { params: awaitedParams })
+    }
+
     return {
         getRouteHandler,
         postRouteHandler,
         getRouteHandlerAsync,
         postRouteHandlerAsync,
+        feRouteHandler,
+        feRouteHandlerAsync,
     }
 }
 

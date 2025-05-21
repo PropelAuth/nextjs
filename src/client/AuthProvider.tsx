@@ -21,6 +21,7 @@ export interface RedirectOptions {
 interface InternalAuthState {
     loading: boolean
     userAndAccessToken: UserAndAccessToken
+    authUrl: string
 
     logout: () => Promise<void>
 
@@ -361,6 +362,7 @@ export const AuthProvider = (props: AuthProviderProps) => {
     const value = {
         loading: authState.loading,
         userAndAccessToken: authState.userAndAccessToken,
+        authUrl: props.authUrl,
         logout,
         redirectToLoginPage,
         redirectToSignupPage,
