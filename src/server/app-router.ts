@@ -577,8 +577,11 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             },
         }
 
-        if (req.body) {
-            request.body = JSON.stringify(await req.json())
+        try {
+            const body = JSON.stringify(await req.json())
+            request.body = body
+        } catch (_e) {
+            // no body present, don't attach
         }
 
         const response = await fetch(url, request)
