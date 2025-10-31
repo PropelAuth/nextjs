@@ -80,4 +80,18 @@ export type {
     MfaNotEnabledException,
     IncorrectMfaCodeException,
     RevokePendingOrgInviteException,
+    SendSmsMfaCodeRequest,
+    SendSmsMfaCodeRequestResponse,
+    VerifySmsChallengeRequest,
+    VerifySmsChallengeResponse,
+    InviteUserToOrgByUserIdRequest,
+    FetchUserMfaMethodsResponse,
+    ApiKeyUsageQueryRequest,
+    ApiKeyUsageQueryResponse,
+    ApiKeysImportRequest,
+    Employee,
+    MfaPhoneType,
+    MfaPhones,
+    MfaTotpType,
+    ApiKeyImportException
 } from '@propelauth/node-apis'
