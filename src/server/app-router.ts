@@ -556,25 +556,33 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
     }
 
-    async function frontendApisRouteHandler(req: NextRequest, slug?: string) {
+    async function frontendApisRouteHandler(req: NextRequest, slug: string) {
         const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
+
+        // Kept as a precaution
+        if (!slug) {
+            return new Response(null, { status: 404 })
+        }
 
         const authUrlOrigin = getAuthUrlOrigin()
         const url = `${authUrlOrigin}/api/fe/v3/${slug}`
         const xCsrfToken = req.headers.get('X-CSRF-Token')
         const contentType = req.headers.get('Content-Type')
 
-        if (!refreshToken || !slug || !xCsrfToken || !contentType) {
-            return new Response(null, { status: 401 })
+        const headers: HeadersInit = {}
+        if (contentType) {
+            headers['Content-Type'] = contentType
+        }
+        if (xCsrfToken) {
+            headers['X-CSRF-Token'] = xCsrfToken
+        }
+        if (refreshToken) {
+            headers['cookie'] = `refresh_token=${refreshToken}`
         }
 
         const request: RequestInit = {
             method: req.method,
-            headers: {
-                'Content-Type': contentType,
-                'X-CSRF-Token': xCsrfToken,
-                cookie: `refresh_token=${refreshToken}`,
-            },
+            headers,
         }
 
         if (req.body) {
