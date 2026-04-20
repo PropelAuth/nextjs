@@ -1,0 +1,29 @@
+name: npm publish
+on:
+    release:
+        types: [published]
+
+permissions:
+    contents: read
+    id-token: write
+
+jobs:
+    publish:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: "24"
+
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 10
+
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm run build
+            - run: pnpm publish
