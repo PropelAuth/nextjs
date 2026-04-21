@@ -1,6 +1,11 @@
 {
     "name": "@propelauth/nextjs",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/PropelAuth/nextjs"
+    },
     "version": "0.3.17",
+    "license": "MIT",
     "exports": {
         "./server": {
             "browser": "./dist/server/index.mjs",
