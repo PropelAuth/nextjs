@@ -93,7 +93,21 @@ export type {
     MfaPhoneType,
     MfaPhones,
     MfaTotpType,
-    ApiKeyImportException
+    ApiKeyImportException,
+    ScimGroup,
+    ScimGroupResultPage,
+    ScimGroupResult,
+    ScimGroupMember,
+    FetchOrgScimGroupsRequest,
+    FetchScimGroupRequest,
+    SetOidcIdpMetadataRequestBase,
+    SetGenericOidcMetadataRequest,
+    SetOktaOidcMetadataRequest,
+    SetAzureOidcMetadataRequest,
+    SetOidcIdpMetadataRequest,
+    SocialLoginTokenProvider,
+    SocialLoginToken,
+    SocialLoginTokensResponse,
 } from '@propelauth/node-apis'
 export {
     ReengagementReportInterval,
