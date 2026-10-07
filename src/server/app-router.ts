@@ -15,6 +15,7 @@ import {
     LOGIN_PATH,
     LOGOUT_PATH,
     REFRESH_TOKEN_COOKIE_NAME,
+    rateLimitedResponse,
     refreshTokenWithAccessAndRefreshToken,
     RETURN_TO_PATH_COOKIE_NAME,
     STATE_COOKIE_NAME,
@@ -196,7 +197,9 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             // If there's an active org, we need to re-issue a new access token for the active org
             if (activeOrgId) {
                 const response = await refreshTokenWithAccessAndRefreshToken(data.refresh_token, activeOrgId)
-                if (response.error === 'unexpected') {
+                if (response.error === 'rate_limited') {
+                    return rateLimitedResponse(response.retryAfter)
+                } else if (response.error === 'unexpected') {
                     throw new Error('Unexpected error while setting active org')
                 } else if (response.error === 'unauthorized') {
                     console.error(
@@ -265,7 +268,9 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         // For the userinfo endpoint, we want to get the most up-to-date info, so we'll refresh the access token
         if (oldRefreshToken) {
             const refreshResponse = await refreshTokenWithAccessAndRefreshToken(oldRefreshToken, activeOrgId)
-            if (refreshResponse.error === 'unexpected') {
+            if (refreshResponse.error === 'rate_limited') {
+                return rateLimitedResponse(refreshResponse.retryAfter)
+            } else if (refreshResponse.error === 'unexpected') {
                 throw new Error('Unexpected error while refreshing access token')
             } else if (refreshResponse.error === 'unauthorized') {
                 const headers = new Headers()
@@ -394,7 +399,9 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
         const activeOrgId = req.cookies.get(ACTIVE_ORG_ID_COOKIE_NAME)?.value
         const refreshResponse = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
-        if (refreshResponse.error === 'unexpected') {
+        if (refreshResponse.error === 'rate_limited') {
+            return rateLimitedResponse(refreshResponse.retryAfter)
+        } else if (refreshResponse.error === 'unexpected') {
             console.error('Unexpected error while refreshing access token')
             return new Response('Unexpected error', { status: 500 })
         } else if (refreshResponse.error === 'unauthorized') {
@@ -501,7 +508,9 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
 
         const refreshResponse = await refreshTokenWithAccessAndRefreshToken(oldRefreshToken, activeOrgId)
-        if (refreshResponse.error === 'unexpected') {
+        if (refreshResponse.error === 'rate_limited') {
+            return rateLimitedResponse(refreshResponse.retryAfter)
+        } else if (refreshResponse.error === 'unexpected') {
             throw new Error('Unexpected error while setting active org id')
         } else if (refreshResponse.error === 'unauthorized') {
             return new Response('Unauthorized', { status: 401 })

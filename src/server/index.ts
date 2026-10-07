@@ -1,7 +1,7 @@
 export { validateAccessToken, validateAccessTokenOrUndefined } from './shared'
 export type { OrgIdToOrgMemberInfo } from '../user'
 export { UserFromToken, OrgMemberInfo } from '../user'
-export { UnauthorizedException, ConfigurationException } from './exceptions'
+export { UnauthorizedException, ConfigurationException, RefreshRateLimitedException } from './exceptions'
 export { getPropelAuthApis } from './api'
 export { AuthHookResponse } from './middleware/auth-hook-response'
 export { buildAuthMiddleware } from './middleware/advanced-middleware'

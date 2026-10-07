@@ -8,6 +8,7 @@ import {
     validateAccessTokenOrUndefined,
 } from './shared'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
+import { RefreshRateLimitedException } from './exceptions'
 import { UserFromToken } from '../user'
 
 export type AuthInfo =
@@ -43,7 +44,9 @@ export async function getAuthInfoFromServerSideProps(
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
         const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
-        if (response.error === 'unexpected') {
+        if (response.error === 'rate_limited') {
+            throw new RefreshRateLimitedException('Rate limited while refreshing access token', response.retryAfter)
+        } else if (response.error === 'unexpected') {
             throw new Error('Unexpected error while refreshing access token')
         } else if (response.error === 'unauthorized') {
             props.res.setHeader('Set-Cookie', [
@@ -102,7 +105,9 @@ export async function getAuthInfoFromApiRouteRequest(
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
         const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
-        if (response.error === 'unexpected') {
+        if (response.error === 'rate_limited') {
+            throw new RefreshRateLimitedException('Rate limited while refreshing access token', response.retryAfter)
+        } else if (response.error === 'unexpected') {
             throw new Error('Unexpected error while refreshing access token')
         } else if (response.error === 'unauthorized') {
             res.setHeader('Set-Cookie', [

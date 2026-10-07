@@ -5,3 +5,4 @@ export {
     getAuthInfoFromServerSideProps
 } from "./pages"
 export type {AuthInfo} from "./pages"
+export { RefreshRateLimitedException } from "./exceptions"
