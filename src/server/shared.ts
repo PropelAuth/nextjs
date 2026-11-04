@@ -76,6 +76,15 @@ export function getVerifierKey() {
     return verifierKey.replace(/\\n/g, '\n')
 }
 
+// This can be used during rotation to support multiple verifier keys
+export function getFallbackVerifierKey(): string | undefined {
+    const fallbackVerifierKey = process.env.PROPELAUTH_FALLBACK_VERIFIER_KEY
+    if (!fallbackVerifierKey) {
+        return undefined
+    }
+    return fallbackVerifierKey.replace(/\\n/g, '\n')
+}
+
 export function getSameSiteCookieValue(): "none" | "lax" | "strict" {
     const sameSiteOverride = process.env.PROPELAUTH_SAME_SITE_COOKIE_OVERRIDE
     if (sameSiteOverride === 'none') {
@@ -152,9 +161,10 @@ export async function validateAccessTokenOrUndefined(
 }
 
 export async function validateAccessToken(accessToken: string | undefined): Promise<UserFromToken> {
-    let publicKey
+    let publicKeys: jose.KeyLike[]
     try {
-        publicKey = await jose.importSPKI(getVerifierKey(), 'RS256')
+        const verifierKeys = [getVerifierKey(), getFallbackVerifierKey()].filter((key): key is string => !!key)
+        publicKeys = await Promise.all(verifierKeys.map((key) => jose.importSPKI(key, 'RS256')))
     } catch (err) {
         console.error("Verifier key is invalid. Make sure it's specified correctly, including the newlines.", err)
         throw new ConfigurationException('Invalid verifier key')
@@ -169,18 +179,32 @@ export async function validateAccessToken(accessToken: string | undefined): Prom
         accessTokenWithoutBearer = accessToken.substring('bearer '.length)
     }
 
-    try {
-        const { payload } = await jose.jwtVerify(accessTokenWithoutBearer, publicKey, {
-            issuer: getAuthUrlOrigin(),
-            algorithms: ['RS256'],
-        })
+    // Tries the verifier key first, then the fallback key if present
+    let lastError: unknown
+    for (const publicKey of publicKeys) {
+        try {
+            const { payload } = await jose.jwtVerify(accessTokenWithoutBearer, publicKey, {
+                issuer: getAuthUrlOrigin(),
+                algorithms: ['RS256'],
+            })
 
-        return toUser(<InternalUser>payload)
-    } catch (e) {
-        if (e instanceof Error) {
-            throw new UnauthorizedException(e.message)
-        } else {
-            throw new UnauthorizedException('Unable to decode jwt')
+            return toUser(<InternalUser>payload)
+        } catch (e) {
+            // Only a signature mismatch means "try the next key". The signature is checked
+            // before the claims, so an expiry/issuer error means this key was the signer.
+            if ((e as jose.errors.JOSEError)?.code !== 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') {
+                throw toUnauthorizedException(e)
+            }
+            lastError = e
         }
+    }
+    throw toUnauthorizedException(lastError)
+}
+
+function toUnauthorizedException(e: unknown): UnauthorizedException {
+    if (e instanceof Error) {
+        return new UnauthorizedException(e.message)
+    } else {
+        return new UnauthorizedException('Unable to decode jwt')
     }
 }
