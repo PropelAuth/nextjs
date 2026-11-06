@@ -13,6 +13,11 @@ type RefreshAndAccessTokensUnauthorizedError = {
     error: 'unauthorized'
 }
 
+type RefreshAndAccessTokensRateLimitedError = {
+    error: 'rate_limited'
+    retryAfter?: string
+}
+
 type RefreshAndAccessTokensUnexpectedError = {
     error: 'unexpected'
 }
@@ -20,6 +25,7 @@ type RefreshAndAccessTokensUnexpectedError = {
 export type RefreshTokenResponse =
     | RefreshAndAccessTokens
     | RefreshAndAccessTokensUnauthorizedError
+    | RefreshAndAccessTokensRateLimitedError
     | RefreshAndAccessTokensUnexpectedError
 
 export const LOGIN_PATH = '/api/auth/login'
@@ -138,9 +144,21 @@ export async function refreshTokenWithAccessAndRefreshToken(
         }
     } else if (response.status === 400 || response.status === 401) {
         return { error: 'unauthorized' }
+    } else if (response.status === 429) {
+        return { error: 'rate_limited', retryAfter: response.headers.get('Retry-After') ?? undefined }
     } else {
         return { error: 'unexpected' }
     }
+}
+
+// A rate-limited refresh is expected and retryable, so pass the 429 (and any Retry-After) on to the
+// caller instead of throwing, which Next.js would turn into a 500.
+export function rateLimitedResponse(retryAfter?: string): Response {
+    const headers = new Headers()
+    if (retryAfter) {
+        headers.set('Retry-After', retryAfter)
+    }
+    return new Response('Too many requests', { status: 429, headers })
 }
 
 export async function validateAccessTokenOrUndefined(

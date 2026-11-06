@@ -1,4 +1,4 @@
-export { UnauthorizedException, ConfigurationException } from './exceptions'
+export { UnauthorizedException, ConfigurationException, RefreshRateLimitedException } from './exceptions'
 export {
     getRouteHandlers,
     getUser,
