@@ -14,7 +14,7 @@ import { authCookieOptions } from '../auth-response'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../../shared'
 import { getNextResponse } from '../app-router'
 import { UserFromToken } from '../../user'
-import { AuthHookResponse } from './auth-hook-response'
+import { AuthHookResponse, isAuthHookResponse } from './auth-hook-response'
 
 export type PropelAuthMiddlewareOptions = {
     afterAuthHook?: (req: NextRequest, res: NextResponse, user?: UserFromToken) => Promise<AuthHookResponse>
@@ -84,7 +84,7 @@ const handlePostAuthHook = async (
 ): Promise<NextResponse> => {
     if (options?.afterAuthHook) {
         const hookResponse = await options.afterAuthHook(req, res, user)
-        if (hookResponse instanceof AuthHookResponse) {
+        if (isAuthHookResponse(hookResponse)) {
             if (!hookResponse.shouldContinue()) {
                 return hookResponse.getResponse() ?? res
             }

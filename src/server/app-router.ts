@@ -71,6 +71,7 @@ export async function authMiddleware(req: NextRequest): Promise<Response> {
 
 export function getNextResponse(request: NextRequest, newAccessToken?: string) {
     const headers = new Headers(request.headers)
+    headers.delete(CUSTOM_HEADER_FOR_ACCESS_TOKEN)
     headers.set(CUSTOM_HEADER_FOR_URL, request.nextUrl.toString())
     headers.set(CUSTOM_HEADER_FOR_PATH, request.nextUrl.pathname + request.nextUrl.search)
     if (newAccessToken) {
