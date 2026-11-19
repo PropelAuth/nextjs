@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
     ACCESS_TOKEN_COOKIE_NAME,
     CALLBACK_PATH,
-    COOKIE_OPTIONS,
     LOGOUT_PATH,
     REFRESH_TOKEN_COOKIE_NAME,
     USERINFO_PATH,
@@ -11,6 +10,7 @@ import {
     validateAccessToken,
     validateAccessTokenOrUndefined,
 } from '../shared'
+import { authCookieOptions } from '../auth-response'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../../shared'
 import { getNextResponse } from '../app-router'
 import { UserFromToken } from '../../user'
@@ -64,14 +64,8 @@ export function buildAuthMiddleware(options?: PropelAuthMiddlewareOptions): (req
             } else {
                 const sameSite = getSameSiteCookieValue()
                 const nextResponse = getNextResponse(req, response.accessToken)
-                nextResponse.cookies.set(ACCESS_TOKEN_COOKIE_NAME, response.accessToken, {
-                    ...COOKIE_OPTIONS,
-                    sameSite,
-                })
-                nextResponse.cookies.set(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken, {
-                    ...COOKIE_OPTIONS,
-                    sameSite,
-                })
+                nextResponse.cookies.set(ACCESS_TOKEN_COOKIE_NAME, response.accessToken, authCookieOptions(sameSite))
+                nextResponse.cookies.set(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken, authCookieOptions(sameSite))
                 const user = await validateAccessToken(response.accessToken)
                 return await handlePostAuthHook(req, nextResponse, user, options)
             }
