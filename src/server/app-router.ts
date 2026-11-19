@@ -230,6 +230,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                         { name: ACCESS_TOKEN_COOKIE_NAME, value: response.accessToken, sameSite },
                         { name: REFRESH_TOKEN_COOKIE_NAME, value: response.refreshToken, sameSite },
                         { name: ACTIVE_ORG_ID_COOKIE_NAME, value: activeOrgId, sameSite },
+                        authCookieDeletion(STATE_COOKIE_NAME, sameSite),
                         getCookieForReturnToPathInCallback(returnToPathFromCookie, sameSite),
                     ])
                     return new Response(null, {
@@ -245,6 +246,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 { name: ACCESS_TOKEN_COOKIE_NAME, value: accessToken, sameSite },
                 { name: REFRESH_TOKEN_COOKIE_NAME, value: data.refresh_token, sameSite },
                 authCookieDeletion(ACTIVE_ORG_ID_COOKIE_NAME, sameSite),
+                authCookieDeletion(STATE_COOKIE_NAME, sameSite),
                 getCookieForReturnToPathInCallback(returnToPathFromCookie, sameSite),
             ])
             return new Response(null, {
@@ -324,7 +326,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
         const headers = new Headers()
         appendAuthCookies(headers, allAuthCookieDeletions(sameSite))
-        return unauthorizedResponse()
+        return unauthorizedResponse(headers)
     }
 
     async function logoutGetHandler(req: NextRequest) {
@@ -368,6 +370,10 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         } else {
             const headers = new Headers()
             headers.append('Location', path)
+            appendAuthCookies(headers, [
+                { name: ACCESS_TOKEN_COOKIE_NAME, value: refreshResponse.accessToken, sameSite },
+                { name: REFRESH_TOKEN_COOKIE_NAME, value: refreshResponse.refreshToken, sameSite },
+            ])
             return new Response(null, {
                 status: 302,
                 headers,
