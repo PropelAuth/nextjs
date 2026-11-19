@@ -74,6 +74,7 @@
     },
     "dependencies": {
         "@propelauth/node-apis": "^2.1.37",
+        "cookie": "^2.0.2",
         "jose": "^5.10.0"
     }
 }
