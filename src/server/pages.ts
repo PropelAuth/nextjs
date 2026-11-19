@@ -8,7 +8,13 @@ import {
     validateAccessTokenOrUndefined,
 } from './shared'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
-import { AuthCookie, authCookieDeletion, SameSiteCookieValue, toSetCookieHeaderValues } from './auth-response'
+import {
+    AUTH_CACHE_CONTROL,
+    AuthCookie,
+    authCookieDeletion,
+    SameSiteCookieValue,
+    toSetCookieHeaderValues,
+} from './auth-response'
 import { UserFromToken } from '../user'
 
 type SetCookieCapableResponse = {
@@ -20,6 +26,7 @@ function appendAuthCookiesToNodeResponse(res: SetCookieCapableResponse, cookies:
     const existing = res.getHeader('Set-Cookie')
     const existingValues = existing === undefined ? [] : [existing].flat().map(String)
     res.setHeader('Set-Cookie', [...existingValues, ...toSetCookieHeaderValues(cookies)])
+    res.setHeader('Cache-Control', AUTH_CACHE_CONTROL)
 }
 
 function refreshedTokenCookies(
@@ -73,7 +80,7 @@ export async function getAuthInfoFromServerSideProps(
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
         const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
-        if (response.error === 'unexpected') {
+        if (response.error === 'unexpected' || response.error === 'rate_limited') {
             throw new Error('Unexpected error while refreshing access token')
         } else if (response.error === 'unauthorized') {
             appendAuthCookiesToNodeResponse(props.res, tokenCookieDeletions(sameSite))
@@ -129,7 +136,7 @@ export async function getAuthInfoFromApiRouteRequest(
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
         const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
-        if (response.error === 'unexpected') {
+        if (response.error === 'unexpected' || response.error === 'rate_limited') {
             throw new Error('Unexpected error while refreshing access token')
         } else if (response.error === 'unauthorized') {
             appendAuthCookiesToNodeResponse(res, tokenCookieDeletions(sameSite))

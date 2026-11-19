@@ -10,7 +10,7 @@ import {
     validateAccessToken,
     validateAccessTokenOrUndefined,
 } from '../shared'
-import { authCookieOptions } from '../auth-response'
+import { AUTH_CACHE_CONTROL, authCookieOptions, rateLimitedResponse } from '../auth-response'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../../shared'
 import { getNextResponse } from '../app-router'
 import { UserFromToken } from '../../user'
@@ -56,16 +56,20 @@ export function buildAuthMiddleware(options?: PropelAuthMiddlewareOptions): (req
             const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
             if (response.error === 'unexpected') {
                 throw new Error('Unexpected error while refreshing access token')
+            } else if (response.error === 'rate_limited') {
+                return rateLimitedResponse(response.retryAfter)
             } else if (response.error === 'unauthorized') {
                 const response = getNextResponse(req)
                 response.cookies.delete(ACCESS_TOKEN_COOKIE_NAME)
                 response.cookies.delete(REFRESH_TOKEN_COOKIE_NAME)
+                response.headers.set('Cache-Control', AUTH_CACHE_CONTROL)
                 return await handlePostAuthHook(req, response, undefined, options)
             } else {
                 const sameSite = getSameSiteCookieValue()
                 const nextResponse = getNextResponse(req, response.accessToken)
                 nextResponse.cookies.set(ACCESS_TOKEN_COOKIE_NAME, response.accessToken, authCookieOptions(sameSite))
                 nextResponse.cookies.set(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken, authCookieOptions(sameSite))
+                nextResponse.headers.set('Cache-Control', AUTH_CACHE_CONTROL)
                 const user = await validateAccessToken(response.accessToken)
                 return await handlePostAuthHook(req, nextResponse, user, options)
             }

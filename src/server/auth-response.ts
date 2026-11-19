@@ -2,6 +2,24 @@ import { stringifySetCookie } from 'cookie'
 
 export type SameSiteCookieValue = 'none' | 'lax' | 'strict'
 
+export const AUTH_CACHE_CONTROL = 'private, no-cache, no-store, max-age=0, must-revalidate'
+
+export function unexpectedErrorResponse(): Response {
+    return new Response('Unexpected error', { status: 500 })
+}
+
+export function unauthorizedResponse(headers?: Headers): Response {
+    return new Response('Unauthorized', { status: 401, headers })
+}
+
+export function rateLimitedResponse(retryAfter: string | undefined): Response {
+    const headers = new Headers()
+    if (retryAfter) {
+        headers.set('Retry-After', retryAfter)
+    }
+    return new Response('Too many requests', { status: 429, headers })
+}
+
 export type AuthCookie = {
     name: string
     value: string

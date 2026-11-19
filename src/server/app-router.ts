@@ -19,7 +19,16 @@ import {
     validateAccessToken,
     validateAccessTokenOrUndefined,
 } from './shared'
-import { appendAuthCookies, AuthCookie, authCookieDeletion, SameSiteCookieValue } from './auth-response'
+import {
+    appendAuthCookies,
+    AUTH_CACHE_CONTROL,
+    AuthCookie,
+    authCookieDeletion,
+    rateLimitedResponse,
+    SameSiteCookieValue,
+    unauthorizedResponse,
+    unexpectedErrorResponse,
+} from './auth-response'
 import { UserFromToken } from './index'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
 import { buildAuthMiddleware } from './middleware/advanced-middleware'
@@ -182,7 +191,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 returnToPathFromCookie ?? (args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : '/')
             if (!returnToPath) {
                 console.error('postLoginRedirectPathFn returned undefined')
-                return new Response('Unexpected error', { status: 500 })
+                return unexpectedErrorResponse()
             }
 
             // For Active Org, if there is one set, we need to issue a new access token
@@ -205,12 +214,15 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             if (activeOrgId) {
                 const response = await refreshTokenWithAccessAndRefreshToken(data.refresh_token, activeOrgId)
                 if (response.error === 'unexpected') {
-                    throw new Error('Unexpected error while setting active org')
+                    console.error('Unexpected error while setting active org')
+                    return unexpectedErrorResponse()
+                } else if (response.error === 'rate_limited') {
+                    return rateLimitedResponse(response.retryAfter)
                 } else if (response.error === 'unauthorized') {
                     console.error(
                         'Unauthorized error while setting active org. Your user may not have access to this org'
                     )
-                    return new Response('Unauthorized', { status: 401 })
+                    return unauthorizedResponse()
                 } else {
                     const headers = new Headers()
                     headers.append('Location', returnToPath)
@@ -245,9 +257,9 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             console.error(
                 `Couldn't finish the login process for this user. This is most likely caused by an incorrect PROPELAUTH_API_KEY. Your API key starts with ${firstFourChars}... double check that that matches the API key in the PropelAuth dashboard for this environment.`
             )
-            return new Response('Unexpected error', { status: 500 })
+            return unexpectedErrorResponse()
         } else {
-            return new Response('Unexpected error', { status: 500 })
+            return unexpectedErrorResponse()
         }
     }
 
@@ -260,11 +272,14 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         if (oldRefreshToken) {
             const refreshResponse = await refreshTokenWithAccessAndRefreshToken(oldRefreshToken, activeOrgId)
             if (refreshResponse.error === 'unexpected') {
-                throw new Error('Unexpected error while refreshing access token')
+                console.error('Unexpected error while refreshing access token')
+                return unexpectedErrorResponse()
+            } else if (refreshResponse.error === 'rate_limited') {
+                return rateLimitedResponse(refreshResponse.retryAfter)
             } else if (refreshResponse.error === 'unauthorized') {
                 const headers = new Headers()
                 appendAuthCookies(headers, allAuthCookieDeletions(sameSite))
-                return new Response('Unauthorized', { status: 401, headers })
+                return unauthorizedResponse(headers)
             }
 
             const refreshToken = refreshResponse.refreshToken
@@ -301,18 +316,15 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             } else if (response.status === 401) {
                 const headers = new Headers()
                 appendAuthCookies(headers, allAuthCookieDeletions(sameSite))
-                return new Response(null, {
-                    status: 401,
-                    headers,
-                })
+                return unauthorizedResponse(headers)
             } else {
-                return new Response(null, { status: 500 })
+                return unexpectedErrorResponse()
             }
         }
 
         const headers = new Headers()
         appendAuthCookies(headers, allAuthCookieDeletions(sameSite))
-        return new Response(null, { status: 401 })
+        return unauthorizedResponse()
     }
 
     async function logoutGetHandler(req: NextRequest) {
@@ -323,7 +335,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         const path = args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : '/'
         if (!path) {
             console.error('postLoginPathFn returned undefined')
-            return new Response('Unexpected error', { status: 500 })
+            return unexpectedErrorResponse()
         }
         const sameSite = getSameSiteCookieValue()
 
@@ -342,7 +354,9 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         const refreshResponse = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
         if (refreshResponse.error === 'unexpected') {
             console.error('Unexpected error while refreshing access token')
-            return new Response('Unexpected error', { status: 500 })
+            return unexpectedErrorResponse()
+        } else if (refreshResponse.error === 'rate_limited') {
+            return rateLimitedResponse(refreshResponse.retryAfter)
         } else if (refreshResponse.error === 'unauthorized') {
             const headers = new Headers()
             headers.append('Location', path)
@@ -403,7 +417,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         if (!oldRefreshToken) {
             const headers = new Headers()
             appendAuthCookies(headers, [authCookieDeletion(ACTIVE_ORG_ID_COOKIE_NAME, sameSite)])
-            return new Response(null, { status: 401, headers })
+            return unauthorizedResponse(headers)
         }
 
         if (!activeOrgId) {
@@ -412,9 +426,12 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
         const refreshResponse = await refreshTokenWithAccessAndRefreshToken(oldRefreshToken, activeOrgId)
         if (refreshResponse.error === 'unexpected') {
-            throw new Error('Unexpected error while setting active org id')
+            console.error('Unexpected error while setting active org id')
+            return unexpectedErrorResponse()
+        } else if (refreshResponse.error === 'rate_limited') {
+            return rateLimitedResponse(refreshResponse.retryAfter)
         } else if (refreshResponse.error === 'unauthorized') {
-            return new Response('Unauthorized', { status: 401 })
+            return unauthorizedResponse()
         }
 
         const refreshToken = refreshResponse.refreshToken
@@ -451,15 +468,13 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 headers,
             })
         } else if (response.status === 401) {
-            return new Response(null, {
-                status: 401,
-            })
+            return unauthorizedResponse()
         } else {
-            return new Response(null, { status: 500 })
+            return unexpectedErrorResponse()
         }
     }
 
-    async function getRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
+    const getRouteHandler = withAuthRouteDefaults(async (req, { params }) => {
         const { slug } = await params
 
         if (slug === 'login') {
@@ -475,9 +490,9 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         } else {
             return new Response('', { status: 404 })
         }
-    }
+    })
 
-    async function postRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
+    const postRouteHandler = withAuthRouteDefaults(async (req, { params }) => {
         const { slug } = await params
 
         if (slug === 'logout') {
@@ -487,7 +502,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         } else {
             return new Response('', { status: 404 })
         }
-    }
+    })
 
     async function getRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
         const awaitedParams = await params
@@ -504,6 +519,16 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         postRouteHandler,
         getRouteHandlerAsync,
         postRouteHandlerAsync,
+    }
+}
+
+type AuthRouteHandler = (req: NextRequest, context: { params: { slug: string } }) => Promise<Response>
+
+function withAuthRouteDefaults(handler: AuthRouteHandler): AuthRouteHandler {
+    return async (req, context) => {
+        const response = await handler(req, context)
+        response.headers.set('Cache-Control', AUTH_CACHE_CONTROL)
+        return response
     }
 }
 

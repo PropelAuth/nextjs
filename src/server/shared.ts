@@ -18,10 +18,16 @@ type RefreshAndAccessTokensUnexpectedError = {
     error: 'unexpected'
 }
 
+type RefreshAndAccessTokensRateLimitedError = {
+    error: 'rate_limited'
+    retryAfter?: string
+}
+
 export type RefreshTokenResponse =
     | RefreshAndAccessTokens
     | RefreshAndAccessTokensUnauthorizedError
     | RefreshAndAccessTokensUnexpectedError
+    | RefreshAndAccessTokensRateLimitedError
 
 export const LOGIN_PATH = '/api/auth/login'
 export const CALLBACK_PATH = '/api/auth/callback'
@@ -141,6 +147,8 @@ export async function refreshTokenWithAccessAndRefreshToken(
         }
     } else if (response.status === 400 || response.status === 401) {
         return { error: 'unauthorized' }
+    } else if (response.status === 429) {
+        return { error: 'rate_limited', retryAfter: response.headers.get('Retry-After') ?? undefined }
     } else {
         return { error: 'unexpected' }
     }
