@@ -116,17 +116,18 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         headers.append('Location', authorize_url)
         appendAuthCookies(headers, [{ name: STATE_COOKIE_NAME, value: state, sameSite }])
         if (returnToPath) {
-            if (returnToPath.startsWith('/')) {
+            const localReturnToPath = toLocalPath(returnToPath)
+            if (localReturnToPath) {
                 appendAuthCookies(headers, [
                     {
                         name: RETURN_TO_PATH_COOKIE_NAME,
-                        value: returnToPath,
+                        value: localReturnToPath,
                         sameSite,
                         maxAgeSeconds: RETURN_TO_PATH_MAX_AGE_SECONDS,
                     },
                 ])
             } else {
-                console.warn('return_to_path must start with /')
+                console.warn('return_to_path must be a local path starting with /')
             }
         }
 
@@ -174,7 +175,8 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
             // If we have a return_to_path cookie, we'll use that
             // Otherwise, we'll use the postLoginRedirectPathFn
-            const returnToPathFromCookie = req.cookies.get(RETURN_TO_PATH_COOKIE_NAME)?.value
+            const returnToPathCookieValue = req.cookies.get(RETURN_TO_PATH_COOKIE_NAME)?.value
+            const returnToPathFromCookie = returnToPathCookieValue ? toLocalPath(returnToPathCookieValue) : undefined
             const returnToPath =
                 returnToPathFromCookie ?? (args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : '/')
             if (!returnToPath) {
@@ -504,6 +506,26 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
     }
 }
 
+const LOCAL_PATH_BASE = 'https://local-path.invalid'
+
+function toLocalPath(candidate: string): string | undefined {
+    if (!candidate.startsWith('/')) {
+        return undefined
+    }
+
+    let url: URL
+    try {
+        url = new URL(candidate, LOCAL_PATH_BASE)
+    } catch {
+        return undefined
+    }
+
+    if (url.origin !== LOCAL_PATH_BASE || url.pathname.startsWith('//')) {
+        return undefined
+    }
+    return url.pathname + url.search + url.hash
+}
+
 function randomState(): string {
     const randomBytes = crypto.getRandomValues(new Uint8Array(32))
     return Array.from(randomBytes)
@@ -515,7 +537,7 @@ async function redirectToLogin(redirectOptions?: RedirectOptions) {
     if (!redirectOptions) {
         redirect(LOGIN_PATH)
     } else if (redirectOptions.returnToPath) {
-        const loginPath = LOGIN_PATH + '?return_to_path=' + encodeURI(redirectOptions.returnToPath)
+        const loginPath = LOGIN_PATH + '?return_to_path=' + encodeURIComponent(redirectOptions.returnToPath)
         redirect(loginPath)
     } else if (redirectOptions.returnToCurrentPath) {
         const encodedPath = await getUrlEncodedRedirectPathForCurrentPath()
