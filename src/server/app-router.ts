@@ -3,10 +3,10 @@ import { cookies, headers } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 import {
     ACCESS_TOKEN_COOKIE_NAME,
-    allAuthCookieDeletions,
     CUSTOM_HEADER_FOR_ACCESS_TOKEN,
     CUSTOM_HEADER_FOR_PATH,
     CUSTOM_HEADER_FOR_URL,
+    deletionsForCookiesOnRequest,
     getAuthUrlOrigin,
     getIntegrationApiKey,
     getRedirectUri,
@@ -15,6 +15,7 @@ import {
     REFRESH_TOKEN_COOKIE_NAME,
     refreshTokenWithAccessAndRefreshToken,
     RETURN_TO_PATH_COOKIE_NAME,
+    SESSION_COOKIE_NAMES,
     STATE_COOKIE_NAME,
     validateAccessToken,
     validateAccessTokenOrUndefined,
@@ -280,7 +281,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 return rateLimitedResponse(refreshResponse.retryAfter)
             } else if (refreshResponse.error === 'unauthorized') {
                 const headers = new Headers()
-                appendAuthCookies(headers, allAuthCookieDeletions(sameSite))
+                appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
                 return unauthorizedResponse(headers)
             }
 
@@ -317,7 +318,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 })
             } else if (response.status === 401) {
                 const headers = new Headers()
-                appendAuthCookies(headers, allAuthCookieDeletions(sameSite))
+                appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
                 return unauthorizedResponse(headers)
             } else {
                 return unexpectedErrorResponse()
@@ -325,7 +326,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         }
 
         const headers = new Headers()
-        appendAuthCookies(headers, allAuthCookieDeletions(sameSite))
+        appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
         return unauthorizedResponse(headers)
     }
 
@@ -345,7 +346,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         if (!refreshToken) {
             const headers = new Headers()
             headers.append('Location', path)
-            appendAuthCookies(headers, allAuthCookieDeletions(sameSite))
+            appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
             return new Response(null, {
                 status: 302,
                 headers,
@@ -362,7 +363,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         } else if (refreshResponse.error === 'unauthorized') {
             const headers = new Headers()
             headers.append('Location', path)
-            appendAuthCookies(headers, allAuthCookieDeletions(sameSite))
+            appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
             return new Response(null, {
                 status: 302,
                 headers,
@@ -386,7 +387,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
         if (!refreshToken) {
             const headers = new Headers()
-            appendAuthCookies(headers, allAuthCookieDeletions(sameSite))
+            appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
             return new Response(null, { status: 200, headers })
         }
 
@@ -411,7 +412,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             )
         }
         const headers = new Headers()
-        appendAuthCookies(headers, allAuthCookieDeletions(sameSite))
+        appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
         return new Response(null, { status: 200, headers })
     }
 
@@ -422,7 +423,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
         if (!oldRefreshToken) {
             const headers = new Headers()
-            appendAuthCookies(headers, [authCookieDeletion(ACTIVE_ORG_ID_COOKIE_NAME, sameSite)])
+            appendAuthCookies(headers, deletionsForCookiesOnRequest(req, [ACTIVE_ORG_ID_COOKIE_NAME], sameSite))
             return unauthorizedResponse(headers)
         }
 

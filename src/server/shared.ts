@@ -3,6 +3,7 @@ import { ConfigurationException, UnauthorizedException } from './exceptions'
 import { AuthCookie, authCookieDeletion, SameSiteCookieValue } from './auth-response'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
 import * as jose from 'jose'
+import type { NextRequest } from 'next/server'
 
 type RefreshAndAccessTokens = {
     refreshToken: string
@@ -41,12 +42,16 @@ export const CUSTOM_HEADER_FOR_URL = 'x-propelauth-current-url'
 export const CUSTOM_HEADER_FOR_PATH = 'x-propelauth-current-path'
 export const RETURN_TO_PATH_COOKIE_NAME = '__pa_return_to_path'
 
-export function allAuthCookieDeletions(sameSite: SameSiteCookieValue): AuthCookie[] {
-    return [
-        authCookieDeletion(ACCESS_TOKEN_COOKIE_NAME, sameSite),
-        authCookieDeletion(REFRESH_TOKEN_COOKIE_NAME, sameSite),
-        authCookieDeletion(ACTIVE_ORG_ID_COOKIE_NAME, sameSite),
-    ]
+export const SESSION_COOKIE_NAMES = [ACCESS_TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_NAME, ACTIVE_ORG_ID_COOKIE_NAME]
+
+export function deletionsForCookiesOnRequest(
+    req: NextRequest,
+    cookieNames: string[],
+    sameSite: SameSiteCookieValue
+): AuthCookie[] {
+    return cookieNames
+        .filter((name) => req.cookies.get(name) !== undefined)
+        .map((name) => authCookieDeletion(name, sameSite))
 }
 
 export function getAuthUrlOrigin() {
