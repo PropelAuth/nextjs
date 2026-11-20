@@ -8,7 +8,44 @@ import {
     validateAccessTokenOrUndefined,
 } from './shared'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
+import {
+    AUTH_CACHE_CONTROL,
+    AuthCookie,
+    authCookieDeletion,
+    SameSiteCookieValue,
+    toSetCookieHeaderValues,
+} from './auth-response'
 import { UserFromToken } from '../user'
+
+type SetCookieCapableResponse = {
+    getHeader(name: string): number | string | string[] | undefined
+    setHeader(name: string, value: string | string[]): unknown
+}
+
+function appendAuthCookiesToNodeResponse(res: SetCookieCapableResponse, cookies: AuthCookie[]): void {
+    const existing = res.getHeader('Set-Cookie')
+    const existingValues = existing === undefined ? [] : [existing].flat().map(String)
+    res.setHeader('Set-Cookie', [...existingValues, ...toSetCookieHeaderValues(cookies)])
+    res.setHeader('Cache-Control', AUTH_CACHE_CONTROL)
+}
+
+function refreshedTokenCookies(
+    accessToken: string,
+    refreshToken: string,
+    sameSite: SameSiteCookieValue
+): AuthCookie[] {
+    return [
+        { name: ACCESS_TOKEN_COOKIE_NAME, value: accessToken, sameSite },
+        { name: REFRESH_TOKEN_COOKIE_NAME, value: refreshToken, sameSite },
+    ]
+}
+
+function tokenCookieDeletions(sameSite: SameSiteCookieValue): AuthCookie[] {
+    return [
+        authCookieDeletion(ACCESS_TOKEN_COOKIE_NAME, sameSite),
+        authCookieDeletion(REFRESH_TOKEN_COOKIE_NAME, sameSite),
+    ]
+}
 
 export type AuthInfo =
     | {
@@ -43,23 +80,20 @@ export async function getAuthInfoFromServerSideProps(
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
         const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
-        if (response.error === 'unexpected') {
+        if (response.error === 'unexpected' || response.error === 'rate_limited') {
             throw new Error('Unexpected error while refreshing access token')
         } else if (response.error === 'unauthorized') {
-            props.res.setHeader('Set-Cookie', [
-                `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`,
-                `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`,
-            ])
+            appendAuthCookiesToNodeResponse(props.res, tokenCookieDeletions(sameSite))
             return {
                 user: undefined,
                 accessToken: undefined,
             }
         } else {
             const user = await validateAccessToken(response.accessToken)
-            props.res.setHeader('Set-Cookie', [
-                `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`,
-                `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`,
-            ])
+            appendAuthCookiesToNodeResponse(
+                props.res,
+                refreshedTokenCookies(response.accessToken, response.refreshToken, sameSite)
+            )
             return {
                 user,
                 accessToken: response.accessToken,
@@ -102,23 +136,20 @@ export async function getAuthInfoFromApiRouteRequest(
     // Otherwise, we need to refresh the access token
     if (refreshToken) {
         const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
-        if (response.error === 'unexpected') {
+        if (response.error === 'unexpected' || response.error === 'rate_limited') {
             throw new Error('Unexpected error while refreshing access token')
         } else if (response.error === 'unauthorized') {
-            res.setHeader('Set-Cookie', [
-                `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`,
-                `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`,
-            ])
+            appendAuthCookiesToNodeResponse(res, tokenCookieDeletions(sameSite))
             return {
                 user: undefined,
                 accessToken: undefined,
             }
         } else {
             const user = await validateAccessToken(response.accessToken)
-            res.setHeader('Set-Cookie', [
-                `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`,
-                `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`,
-            ])
+            appendAuthCookiesToNodeResponse(
+                res,
+                refreshedTokenCookies(response.accessToken, response.refreshToken, sameSite)
+            )
             return {
                 user,
                 accessToken: response.accessToken,

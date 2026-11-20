@@ -101,7 +101,11 @@ export class User {
     }
 
     public getOrg(orgId: string): OrgMemberInfo | undefined {
-        return this.orgIdToOrgMemberInfo?.[orgId]
+        if (!this.orgIdToOrgMemberInfo || !this.orgIdToOrgMemberInfo.hasOwnProperty(orgId)) {
+            return undefined
+        }
+
+        return this.orgIdToOrgMemberInfo[orgId]
     }
 
     public getOrgByName(orgName: string): OrgMemberInfo | undefined {

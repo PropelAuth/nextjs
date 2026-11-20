@@ -50,11 +50,11 @@ export class UserFromToken {
     }
 
     public getActiveOrg(): OrgMemberInfo | undefined {
-        if (!this.activeOrgId || !this.orgIdToOrgMemberInfo) {
+        if (!this.activeOrgId) {
             return undefined
         }
 
-        return this.orgIdToOrgMemberInfo[this.activeOrgId]
+        return this.getOrg(this.activeOrgId)
     }
 
     public getActiveOrgId(): string | undefined {
@@ -62,7 +62,7 @@ export class UserFromToken {
     }
 
     public getOrg(orgId: string): OrgMemberInfo | undefined {
-        if (!this.orgIdToOrgMemberInfo) {
+        if (!this.orgIdToOrgMemberInfo || !this.orgIdToOrgMemberInfo.hasOwnProperty(orgId)) {
             return undefined
         }
 

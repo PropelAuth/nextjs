@@ -1,7 +1,9 @@
-import { ResponseCookie } from 'next/dist/compiled/@edge-runtime/cookies'
 import { InternalUser, toUser, UserFromToken } from '../user'
 import { ConfigurationException, UnauthorizedException } from './exceptions'
+import { AuthCookie, authCookieDeletion, SameSiteCookieValue } from './auth-response'
+import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
 import * as jose from 'jose'
+import type { NextRequest } from 'next/server'
 
 type RefreshAndAccessTokens = {
     refreshToken: string
@@ -17,10 +19,16 @@ type RefreshAndAccessTokensUnexpectedError = {
     error: 'unexpected'
 }
 
+type RefreshAndAccessTokensRateLimitedError = {
+    error: 'rate_limited'
+    retryAfter?: string
+}
+
 export type RefreshTokenResponse =
     | RefreshAndAccessTokens
     | RefreshAndAccessTokensUnauthorizedError
     | RefreshAndAccessTokensUnexpectedError
+    | RefreshAndAccessTokensRateLimitedError
 
 export const LOGIN_PATH = '/api/auth/login'
 export const CALLBACK_PATH = '/api/auth/callback'
@@ -34,10 +42,16 @@ export const CUSTOM_HEADER_FOR_URL = 'x-propelauth-current-url'
 export const CUSTOM_HEADER_FOR_PATH = 'x-propelauth-current-path'
 export const RETURN_TO_PATH_COOKIE_NAME = '__pa_return_to_path'
 
-export const COOKIE_OPTIONS: Partial<ResponseCookie> = {
-    httpOnly: true,
-    secure: true,
-    path: '/',
+export const SESSION_COOKIE_NAMES = [ACCESS_TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_NAME, ACTIVE_ORG_ID_COOKIE_NAME]
+
+export function deletionsForCookiesOnRequest(
+    req: NextRequest,
+    cookieNames: string[],
+    sameSite: SameSiteCookieValue
+): AuthCookie[] {
+    return cookieNames
+        .filter((name) => req.cookies.get(name) !== undefined)
+        .map((name) => authCookieDeletion(name, sameSite))
 }
 
 export function getAuthUrlOrigin() {
@@ -85,7 +99,7 @@ export function getFallbackVerifierKey(): string | undefined {
     return fallbackVerifierKey.replace(/\\n/g, '\n')
 }
 
-export function getSameSiteCookieValue(): "none" | "lax" | "strict" {
+export function getSameSiteCookieValue(): SameSiteCookieValue {
     const sameSiteOverride = process.env.PROPELAUTH_SAME_SITE_COOKIE_OVERRIDE
     if (sameSiteOverride === 'none') {
         return 'none'
@@ -138,6 +152,8 @@ export async function refreshTokenWithAccessAndRefreshToken(
         }
     } else if (response.status === 400 || response.status === 401) {
         return { error: 'unauthorized' }
+    } else if (response.status === 429) {
+        return { error: 'rate_limited', retryAfter: response.headers.get('Retry-After') ?? undefined }
     } else {
         return { error: 'unexpected' }
     }

@@ -3,25 +3,33 @@ import { cookies, headers } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 import {
     ACCESS_TOKEN_COOKIE_NAME,
-    CALLBACK_PATH,
-    COOKIE_OPTIONS,
     CUSTOM_HEADER_FOR_ACCESS_TOKEN,
     CUSTOM_HEADER_FOR_PATH,
     CUSTOM_HEADER_FOR_URL,
+    deletionsForCookiesOnRequest,
     getAuthUrlOrigin,
     getIntegrationApiKey,
     getRedirectUri,
     getSameSiteCookieValue,
     LOGIN_PATH,
-    LOGOUT_PATH,
     REFRESH_TOKEN_COOKIE_NAME,
     refreshTokenWithAccessAndRefreshToken,
     RETURN_TO_PATH_COOKIE_NAME,
+    SESSION_COOKIE_NAMES,
     STATE_COOKIE_NAME,
-    USERINFO_PATH,
     validateAccessToken,
     validateAccessTokenOrUndefined,
 } from './shared'
+import {
+    appendAuthCookies,
+    AUTH_CACHE_CONTROL,
+    AuthCookie,
+    authCookieDeletion,
+    rateLimitedResponse,
+    SameSiteCookieValue,
+    unauthorizedResponse,
+    unexpectedErrorResponse,
+} from './auth-response'
 import { UserFromToken } from './index'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../shared'
 import { buildAuthMiddleware } from './middleware/advanced-middleware'
@@ -73,6 +81,7 @@ export async function authMiddleware(req: NextRequest): Promise<Response> {
 
 export function getNextResponse(request: NextRequest, newAccessToken?: string) {
     const headers = new Headers(request.headers)
+    headers.delete(CUSTOM_HEADER_FOR_ACCESS_TOKEN)
     headers.set(CUSTOM_HEADER_FOR_URL, request.nextUrl.toString())
     headers.set(CUSTOM_HEADER_FOR_PATH, request.nextUrl.pathname + request.nextUrl.search)
     if (newAccessToken) {
@@ -89,6 +98,9 @@ export type RouteHandlerArgs = {
     postLoginRedirectPathFn?: (req: NextRequest) => string
     getDefaultActiveOrgId?: (req: NextRequest, user: UserFromToken) => string | undefined
 }
+
+const RETURN_TO_PATH_MAX_AGE_SECONDS = 600
+const RETURN_TO_PATH_RACE_MAX_AGE_SECONDS = 15
 
 export function getRouteHandlers(args?: RouteHandlerArgs) {
     function loginGetHandler(req: NextRequest) {
@@ -113,15 +125,20 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
         const headers = new Headers()
         headers.append('Location', authorize_url)
-        headers.append('Set-Cookie', `${STATE_COOKIE_NAME}=${state}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`)
+        appendAuthCookies(headers, [{ name: STATE_COOKIE_NAME, value: state, sameSite }])
         if (returnToPath) {
-            if (returnToPath.startsWith('/')) {
-                headers.append(
-                    'Set-Cookie',
-                    `${RETURN_TO_PATH_COOKIE_NAME}=${returnToPath}; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600`
-                )
+            const localReturnToPath = toLocalPath(returnToPath)
+            if (localReturnToPath) {
+                appendAuthCookies(headers, [
+                    {
+                        name: RETURN_TO_PATH_COOKIE_NAME,
+                        value: localReturnToPath,
+                        sameSite,
+                        maxAgeSeconds: RETURN_TO_PATH_MAX_AGE_SECONDS,
+                    },
+                ])
             } else {
-                console.warn('return_to_path must start with /')
+                console.warn('return_to_path must be a local path starting with /')
             }
         }
 
@@ -169,12 +186,13 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
             // If we have a return_to_path cookie, we'll use that
             // Otherwise, we'll use the postLoginRedirectPathFn
-            const returnToPathFromCookie = req.cookies.get(RETURN_TO_PATH_COOKIE_NAME)?.value
+            const returnToPathCookieValue = req.cookies.get(RETURN_TO_PATH_COOKIE_NAME)?.value
+            const returnToPathFromCookie = returnToPathCookieValue ? toLocalPath(returnToPathCookieValue) : undefined
             const returnToPath =
                 returnToPathFromCookie ?? (args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : '/')
             if (!returnToPath) {
                 console.error('postLoginRedirectPathFn returned undefined')
-                return new Response('Unexpected error', { status: 500 })
+                return unexpectedErrorResponse()
             }
 
             // For Active Org, if there is one set, we need to issue a new access token
@@ -197,28 +215,25 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             if (activeOrgId) {
                 const response = await refreshTokenWithAccessAndRefreshToken(data.refresh_token, activeOrgId)
                 if (response.error === 'unexpected') {
-                    throw new Error('Unexpected error while setting active org')
+                    console.error('Unexpected error while setting active org')
+                    return unexpectedErrorResponse()
+                } else if (response.error === 'rate_limited') {
+                    return rateLimitedResponse(response.retryAfter)
                 } else if (response.error === 'unauthorized') {
                     console.error(
                         'Unauthorized error while setting active org. Your user may not have access to this org'
                     )
-                    return new Response('Unauthorized', { status: 401 })
+                    return unauthorizedResponse()
                 } else {
                     const headers = new Headers()
                     headers.append('Location', returnToPath)
-                    headers.append(
-                        'Set-Cookie',
-                        `${ACCESS_TOKEN_COOKIE_NAME}=${response.accessToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
-                    )
-                    headers.append(
-                        'Set-Cookie',
-                        `${REFRESH_TOKEN_COOKIE_NAME}=${response.refreshToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
-                    )
-                    headers.append(
-                        'Set-Cookie',
-                        `${ACTIVE_ORG_ID_COOKIE_NAME}=${activeOrgId}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
-                    )
-                    headers.append('Set-Cookie', getCookieForReturnToPathInCallback(returnToPathFromCookie))
+                    appendAuthCookies(headers, [
+                        { name: ACCESS_TOKEN_COOKIE_NAME, value: response.accessToken, sameSite },
+                        { name: REFRESH_TOKEN_COOKIE_NAME, value: response.refreshToken, sameSite },
+                        { name: ACTIVE_ORG_ID_COOKIE_NAME, value: activeOrgId, sameSite },
+                        authCookieDeletion(STATE_COOKIE_NAME, sameSite),
+                        getCookieForReturnToPathInCallback(returnToPathFromCookie, sameSite),
+                    ])
                     return new Response(null, {
                         status: 302,
                         headers,
@@ -228,19 +243,13 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
             const headers = new Headers()
             headers.append('Location', returnToPath)
-            headers.append(
-                'Set-Cookie',
-                `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
-            )
-            headers.append(
-                'Set-Cookie',
-                `${REFRESH_TOKEN_COOKIE_NAME}=${data.refresh_token}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
-            )
-            headers.append(
-                'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-            )
-            headers.append('Set-Cookie', getCookieForReturnToPathInCallback(returnToPathFromCookie))
+            appendAuthCookies(headers, [
+                { name: ACCESS_TOKEN_COOKIE_NAME, value: accessToken, sameSite },
+                { name: REFRESH_TOKEN_COOKIE_NAME, value: data.refresh_token, sameSite },
+                authCookieDeletion(ACTIVE_ORG_ID_COOKIE_NAME, sameSite),
+                authCookieDeletion(STATE_COOKIE_NAME, sameSite),
+                getCookieForReturnToPathInCallback(returnToPathFromCookie, sameSite),
+            ])
             return new Response(null, {
                 status: 302,
                 headers,
@@ -251,9 +260,9 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             console.error(
                 `Couldn't finish the login process for this user. This is most likely caused by an incorrect PROPELAUTH_API_KEY. Your API key starts with ${firstFourChars}... double check that that matches the API key in the PropelAuth dashboard for this environment.`
             )
-            return new Response('Unexpected error', { status: 500 })
+            return unexpectedErrorResponse()
         } else {
-            return new Response('Unexpected error', { status: 500 })
+            return unexpectedErrorResponse()
         }
     }
 
@@ -266,22 +275,14 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         if (oldRefreshToken) {
             const refreshResponse = await refreshTokenWithAccessAndRefreshToken(oldRefreshToken, activeOrgId)
             if (refreshResponse.error === 'unexpected') {
-                throw new Error('Unexpected error while refreshing access token')
+                console.error('Unexpected error while refreshing access token')
+                return unexpectedErrorResponse()
+            } else if (refreshResponse.error === 'rate_limited') {
+                return rateLimitedResponse(refreshResponse.retryAfter)
             } else if (refreshResponse.error === 'unauthorized') {
                 const headers = new Headers()
-                headers.append(
-                    'Set-Cookie',
-                    `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-                )
-                headers.append(
-                    'Set-Cookie',
-                    `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-                )
-                headers.append(
-                    'Set-Cookie',
-                    `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-                )
-                return new Response('Unauthorized', { status: 401, headers })
+                appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
+                return unauthorizedResponse(headers)
             }
 
             const refreshToken = refreshResponse.refreshToken
@@ -306,14 +307,10 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 }
 
                 const headers = new Headers()
-                headers.append(
-                    'Set-Cookie',
-                    `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
-                )
-                headers.append(
-                    'Set-Cookie',
-                    `${REFRESH_TOKEN_COOKIE_NAME}=${refreshToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
-                )
+                appendAuthCookies(headers, [
+                    { name: ACCESS_TOKEN_COOKIE_NAME, value: accessToken, sameSite },
+                    { name: REFRESH_TOKEN_COOKIE_NAME, value: refreshToken, sameSite },
+                ])
                 headers.append('Content-Type', 'application/json')
                 return new Response(JSON.stringify(jsonResponse), {
                     status: 200,
@@ -321,41 +318,16 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
                 })
             } else if (response.status === 401) {
                 const headers = new Headers()
-                headers.append(
-                    'Set-Cookie',
-                    `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-                )
-                headers.append(
-                    'Set-Cookie',
-                    `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-                )
-                headers.append(
-                    'Set-Cookie',
-                    `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-                )
-                return new Response(null, {
-                    status: 401,
-                    headers,
-                })
+                appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
+                return unauthorizedResponse(headers)
             } else {
-                return new Response(null, { status: 500 })
+                return unexpectedErrorResponse()
             }
         }
 
         const headers = new Headers()
-        headers.append(
-            'Set-Cookie',
-            `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-        )
-        headers.append(
-            'Set-Cookie',
-            `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-        )
-        headers.append(
-            'Set-Cookie',
-            `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-        )
-        return new Response(null, { status: 401 })
+        appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
+        return unauthorizedResponse(headers)
     }
 
     async function logoutGetHandler(req: NextRequest) {
@@ -366,7 +338,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         const path = args?.postLoginRedirectPathFn ? args.postLoginRedirectPathFn(req) : '/'
         if (!path) {
             console.error('postLoginPathFn returned undefined')
-            return new Response('Unexpected error', { status: 500 })
+            return unexpectedErrorResponse()
         }
         const sameSite = getSameSiteCookieValue()
 
@@ -374,18 +346,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         if (!refreshToken) {
             const headers = new Headers()
             headers.append('Location', path)
-            headers.append(
-                'Set-Cookie',
-                `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-            )
-            headers.append(
-                'Set-Cookie',
-                `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-            )
-            headers.append(
-                'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-            )
+            appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
             return new Response(null, {
                 status: 302,
                 headers,
@@ -396,22 +357,13 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         const refreshResponse = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
         if (refreshResponse.error === 'unexpected') {
             console.error('Unexpected error while refreshing access token')
-            return new Response('Unexpected error', { status: 500 })
+            return unexpectedErrorResponse()
+        } else if (refreshResponse.error === 'rate_limited') {
+            return rateLimitedResponse(refreshResponse.retryAfter)
         } else if (refreshResponse.error === 'unauthorized') {
             const headers = new Headers()
             headers.append('Location', path)
-            headers.append(
-                'Set-Cookie',
-                `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-            )
-            headers.append(
-                'Set-Cookie',
-                `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-            )
-            headers.append(
-                'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-            )
+            appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
             return new Response(null, {
                 status: 302,
                 headers,
@@ -419,6 +371,10 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         } else {
             const headers = new Headers()
             headers.append('Location', path)
+            appendAuthCookies(headers, [
+                { name: ACCESS_TOKEN_COOKIE_NAME, value: refreshResponse.accessToken, sameSite },
+                { name: REFRESH_TOKEN_COOKIE_NAME, value: refreshResponse.refreshToken, sameSite },
+            ])
             return new Response(null, {
                 status: 302,
                 headers,
@@ -431,18 +387,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
         if (!refreshToken) {
             const headers = new Headers()
-            headers.append(
-                'Set-Cookie',
-                `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-            )
-            headers.append(
-                'Set-Cookie',
-                `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-            )
-            headers.append(
-                'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-            )
+            appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
             return new Response(null, { status: 200, headers })
         }
 
@@ -467,18 +412,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             )
         }
         const headers = new Headers()
-        headers.append(
-            'Set-Cookie',
-            `${ACCESS_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-        )
-        headers.append(
-            'Set-Cookie',
-            `${REFRESH_TOKEN_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-        )
-        headers.append(
-            'Set-Cookie',
-            `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-        )
+        appendAuthCookies(headers, deletionsForCookiesOnRequest(req, SESSION_COOKIE_NAMES, sameSite))
         return new Response(null, { status: 200, headers })
     }
 
@@ -489,11 +423,8 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
         if (!oldRefreshToken) {
             const headers = new Headers()
-            headers.append(
-                'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
-            )
-            return new Response(null, { status: 401, headers })
+            appendAuthCookies(headers, deletionsForCookiesOnRequest(req, [ACTIVE_ORG_ID_COOKIE_NAME], sameSite))
+            return unauthorizedResponse(headers)
         }
 
         if (!activeOrgId) {
@@ -502,9 +433,12 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
 
         const refreshResponse = await refreshTokenWithAccessAndRefreshToken(oldRefreshToken, activeOrgId)
         if (refreshResponse.error === 'unexpected') {
-            throw new Error('Unexpected error while setting active org id')
+            console.error('Unexpected error while setting active org id')
+            return unexpectedErrorResponse()
+        } else if (refreshResponse.error === 'rate_limited') {
+            return rateLimitedResponse(refreshResponse.retryAfter)
         } else if (refreshResponse.error === 'unauthorized') {
-            return new Response('Unauthorized', { status: 401 })
+            return unauthorizedResponse()
         }
 
         const refreshToken = refreshResponse.refreshToken
@@ -530,63 +464,24 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
             }
 
             const headers = new Headers()
-            headers.append(
-                'Set-Cookie',
-                `${ACCESS_TOKEN_COOKIE_NAME}=${accessToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
-            )
-            headers.append(
-                'Set-Cookie',
-                `${REFRESH_TOKEN_COOKIE_NAME}=${refreshToken}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
-            )
-            headers.append(
-                'Set-Cookie',
-                `${ACTIVE_ORG_ID_COOKIE_NAME}=${activeOrgId}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`
-            )
+            appendAuthCookies(headers, [
+                { name: ACCESS_TOKEN_COOKIE_NAME, value: accessToken, sameSite },
+                { name: REFRESH_TOKEN_COOKIE_NAME, value: refreshToken, sameSite },
+                { name: ACTIVE_ORG_ID_COOKIE_NAME, value: activeOrgId, sameSite },
+            ])
             headers.append('Content-Type', 'application/json')
             return new Response(JSON.stringify(jsonResponse), {
                 status: 200,
                 headers,
             })
         } else if (response.status === 401) {
-            return new Response(null, {
-                status: 401,
-            })
+            return unauthorizedResponse()
         } else {
-            return new Response(null, { status: 500 })
+            return unexpectedErrorResponse()
         }
     }
 
-    async function frontendApisRouteHandler(req: NextRequest, slug?: string) {
-        const refreshToken = req.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value
-
-        const authUrlOrigin = getAuthUrlOrigin()
-        const url = `${authUrlOrigin}/api/fe/v3/${slug}`
-        const xCsrfToken = req.headers.get('X-CSRF-Token')
-        const contentType = req.headers.get('Content-Type')
-
-        if (!refreshToken || !slug || !xCsrfToken || !contentType) {
-            return new Response(null, { status: 401 })
-        }
-
-        const request: RequestInit = {
-            method: req.method,
-            headers: {
-                'Content-Type': contentType,
-                'X-CSRF-Token': xCsrfToken,
-                cookie: `refresh_token=${refreshToken}`,
-            },
-        }
-
-        if (req.body) {
-            request.body = JSON.stringify(await req.json())
-        }
-
-        const response = await fetch(url, request)
-
-        return response
-    }
-
-    async function getRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
+    const getRouteHandler = withAuthRouteDefaults(async (req, { params }) => {
         const { slug } = await params
 
         if (slug === 'login') {
@@ -602,9 +497,9 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         } else {
             return new Response('', { status: 404 })
         }
-    }
+    })
 
-    async function postRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
+    const postRouteHandler = withAuthRouteDefaults(async (req, { params }) => {
         const { slug } = await params
 
         if (slug === 'logout') {
@@ -614,17 +509,7 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         } else {
             return new Response('', { status: 404 })
         }
-    }
-
-    async function feRouteHandler(req: NextRequest, { params }: { params: { slug: string } }) {
-        const { slug } = await params
-        if (!Array.isArray(slug)) {
-            return new Response('api/auth/fe/[...slug] directory incorrectly configured', { status: 404 })
-        }
-
-        const path = slug.join('/')
-        return frontendApisRouteHandler(req, path)
-    }
+    })
 
     async function getRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
         const awaitedParams = await params
@@ -636,19 +521,42 @@ export function getRouteHandlers(args?: RouteHandlerArgs) {
         return postRouteHandler(req, { params: awaitedParams })
     }
 
-    async function feRouteHandlerAsync(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
-        const awaitedParams = await params
-        return feRouteHandler(req, { params: awaitedParams })
-    }
-
     return {
         getRouteHandler,
         postRouteHandler,
         getRouteHandlerAsync,
         postRouteHandlerAsync,
-        feRouteHandler,
-        feRouteHandlerAsync,
     }
+}
+
+type AuthRouteHandler = (req: NextRequest, context: { params: { slug: string } }) => Promise<Response>
+
+function withAuthRouteDefaults(handler: AuthRouteHandler): AuthRouteHandler {
+    return async (req, context) => {
+        const response = await handler(req, context)
+        response.headers.set('Cache-Control', AUTH_CACHE_CONTROL)
+        return response
+    }
+}
+
+const LOCAL_PATH_BASE = 'https://local-path.invalid'
+
+function toLocalPath(candidate: string): string | undefined {
+    if (!candidate.startsWith('/')) {
+        return undefined
+    }
+
+    let url: URL
+    try {
+        url = new URL(candidate, LOCAL_PATH_BASE)
+    } catch {
+        return undefined
+    }
+
+    if (url.origin !== LOCAL_PATH_BASE || url.pathname.startsWith('//')) {
+        return undefined
+    }
+    return url.pathname + url.search + url.hash
 }
 
 function randomState(): string {
@@ -662,7 +570,7 @@ async function redirectToLogin(redirectOptions?: RedirectOptions) {
     if (!redirectOptions) {
         redirect(LOGIN_PATH)
     } else if (redirectOptions.returnToPath) {
-        const loginPath = LOGIN_PATH + '?return_to_path=' + encodeURI(redirectOptions.returnToPath)
+        const loginPath = LOGIN_PATH + '?return_to_path=' + encodeURIComponent(redirectOptions.returnToPath)
         redirect(loginPath)
     } else if (redirectOptions.returnToCurrentPath) {
         const encodedPath = await getUrlEncodedRedirectPathForCurrentPath()
@@ -686,13 +594,19 @@ export async function getUrlEncodedRedirectPathForCurrentPath(): Promise<string 
 }
 
 // We should keep the redirect path around for a short period in case multiple windows are racing
-function getCookieForReturnToPathInCallback(returnToPathFromCookie: string | undefined) {
-    const sameSite = getSameSiteCookieValue()
-
+function getCookieForReturnToPathInCallback(
+    returnToPathFromCookie: string | undefined,
+    sameSite: SameSiteCookieValue
+): AuthCookie {
     if (returnToPathFromCookie) {
-        return `${RETURN_TO_PATH_COOKIE_NAME}=${returnToPathFromCookie}; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=15`
+        return {
+            name: RETURN_TO_PATH_COOKIE_NAME,
+            value: returnToPathFromCookie,
+            sameSite,
+            maxAgeSeconds: RETURN_TO_PATH_RACE_MAX_AGE_SECONDS,
+        }
     } else {
-        return `${RETURN_TO_PATH_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0`
+        return authCookieDeletion(RETURN_TO_PATH_COOKIE_NAME, sameSite)
     }
 }
 

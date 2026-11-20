@@ -4,7 +4,7 @@
         "type": "git",
         "url": "https://github.com/PropelAuth/nextjs"
     },
-    "version": "0.3.18",
+    "version": "0.3.19",
     "license": "MIT",
     "exports": {
         "./server": {
@@ -74,6 +74,7 @@
     },
     "dependencies": {
         "@propelauth/node-apis": "^2.1.37",
+        "cookie": "^1.1.1",
         "jose": "^5.10.0"
     }
 }

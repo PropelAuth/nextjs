@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
     ACCESS_TOKEN_COOKIE_NAME,
     CALLBACK_PATH,
-    COOKIE_OPTIONS,
     LOGOUT_PATH,
     REFRESH_TOKEN_COOKIE_NAME,
     USERINFO_PATH,
@@ -11,10 +10,11 @@ import {
     validateAccessToken,
     validateAccessTokenOrUndefined,
 } from '../shared'
+import { AUTH_CACHE_CONTROL, authCookieOptions, rateLimitedResponse } from '../auth-response'
 import { ACTIVE_ORG_ID_COOKIE_NAME } from '../../shared'
 import { getNextResponse } from '../app-router'
 import { UserFromToken } from '../../user'
-import { AuthHookResponse } from './auth-hook-response'
+import { AuthHookResponse, isAuthHookResponse } from './auth-hook-response'
 
 export type PropelAuthMiddlewareOptions = {
     afterAuthHook?: (req: NextRequest, res: NextResponse, user?: UserFromToken) => Promise<AuthHookResponse>
@@ -56,22 +56,20 @@ export function buildAuthMiddleware(options?: PropelAuthMiddlewareOptions): (req
             const response = await refreshTokenWithAccessAndRefreshToken(refreshToken, activeOrgId)
             if (response.error === 'unexpected') {
                 throw new Error('Unexpected error while refreshing access token')
+            } else if (response.error === 'rate_limited') {
+                return rateLimitedResponse(response.retryAfter)
             } else if (response.error === 'unauthorized') {
                 const response = getNextResponse(req)
                 response.cookies.delete(ACCESS_TOKEN_COOKIE_NAME)
                 response.cookies.delete(REFRESH_TOKEN_COOKIE_NAME)
+                response.headers.set('Cache-Control', AUTH_CACHE_CONTROL)
                 return await handlePostAuthHook(req, response, undefined, options)
             } else {
                 const sameSite = getSameSiteCookieValue()
                 const nextResponse = getNextResponse(req, response.accessToken)
-                nextResponse.cookies.set(ACCESS_TOKEN_COOKIE_NAME, response.accessToken, {
-                    ...COOKIE_OPTIONS,
-                    sameSite,
-                })
-                nextResponse.cookies.set(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken, {
-                    ...COOKIE_OPTIONS,
-                    sameSite,
-                })
+                nextResponse.cookies.set(ACCESS_TOKEN_COOKIE_NAME, response.accessToken, authCookieOptions(sameSite))
+                nextResponse.cookies.set(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken, authCookieOptions(sameSite))
+                nextResponse.headers.set('Cache-Control', AUTH_CACHE_CONTROL)
                 const user = await validateAccessToken(response.accessToken)
                 return await handlePostAuthHook(req, nextResponse, user, options)
             }
@@ -90,7 +88,7 @@ const handlePostAuthHook = async (
 ): Promise<NextResponse> => {
     if (options?.afterAuthHook) {
         const hookResponse = await options.afterAuthHook(req, res, user)
-        if (hookResponse instanceof AuthHookResponse) {
+        if (isAuthHookResponse(hookResponse)) {
             if (!hookResponse.shouldContinue()) {
                 return hookResponse.getResponse() ?? res
             }

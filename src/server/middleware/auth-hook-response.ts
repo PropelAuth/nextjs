@@ -22,3 +22,12 @@ export class AuthHookResponse {
         return this.response
     }
 }
+
+export function isAuthHookResponse(value: unknown): value is AuthHookResponse {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as AuthHookResponse).shouldContinue === 'function' &&
+        typeof (value as AuthHookResponse).getResponse === 'function'
+    )
+}
